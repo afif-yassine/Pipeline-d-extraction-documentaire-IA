@@ -1,0 +1,31 @@
+{
+  "name": "pipeline-extraction-factures",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "extract": "tsx pipeline/src/index.ts",
+    "dev": "vite interface",
+    "start": "npm run extract && npm run dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mistralai/mistralai": "^3.5.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}

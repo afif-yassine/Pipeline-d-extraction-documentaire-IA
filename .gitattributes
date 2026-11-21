@@ -1,0 +1,5 @@
+# Fins de ligne LF pour tout le texte, quel que soit le système.
+* text=auto eol=lf
+
+# Les PDF sont des fichiers binaires : git ne doit jamais toucher à leurs octets.
+*.pdf binary
