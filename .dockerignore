@@ -1,0 +1,7 @@
+# Jamais dans l'image : secrets, dépendances de la machine hôte, fichiers générés.
+.env
+node_modules
+interface/dist
+interface/public/results.json
+.git
+docs

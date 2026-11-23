@@ -1,0 +1,29 @@
+# Vérification automatique à chaque push sur main et à chaque pull request :
+# installation propre, vérification des types, puis les tests.
+# Aucune clé Mistral n'est nécessaire : les tests simulent l'API.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm # réutilise les paquets téléchargés d'un push à l'autre
+
+      - name: Installer les dépendances (versions exactes du package-lock.json)
+        run: npm ci
+
+      - name: Vérifier les types TypeScript
+        run: npm run typecheck
+
+      - name: Lancer les tests
+        run: npm test

@@ -1,0 +1,61 @@
+/* Trois couleurs, trois sens : vert = aucun écart, orange = à vérifier / non lu, rouge = écart ou échec. */
+:root {
+  --green: #1e7b34;
+  --green-bg: #e6f4ea;
+  --orange: #a65400;
+  --orange-bg: #fff1dc;
+  --red: #b3261e;
+  --red-bg: #fde7e6;
+  --border: #d9d9d9;
+  --muted: #5f5f5f;
+  font-family: system-ui, sans-serif;
+  color: #1f1f1f;
+  background: #f6f6f6;
+}
+
+body { margin: 0; }
+.page { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+h1 { margin: 0 0 16px; }
+h2 { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+code { background: #eee; padding: 2px 4px; border-radius: 4px; }
+
+.info { color: var(--muted); }
+.info-error { color: var(--red); background: var(--red-bg); padding: 12px; border-radius: 8px; }
+
+.summary ul { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; list-style: none; }
+.badge { padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.badge-no_issue { color: var(--green); background: var(--green-bg); }
+.badge-to_review { color: var(--orange); background: var(--orange-bg); }
+.badge-failed { color: var(--red); background: var(--red-bg); }
+
+.card { background: white; border: 1px solid var(--border); border-left: 6px solid; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.card-no_issue { border-left-color: var(--green); }
+.card-to_review { border-left-color: var(--orange); }
+.card-failed { border-left-color: var(--red); }
+.card-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.error-message { color: var(--red); white-space: pre-wrap; margin: 0; }
+
+.alerts ul { margin: 0 0 12px; padding: 0; list-style: none; }
+.check, .warnings li { padding: 4px 0; }
+.check-ok { color: var(--green); }
+.check-mismatch { color: var(--red); }
+.check-not_verifiable, .warnings li { color: var(--orange); }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.field { display: flex; flex-direction: column; padding: 8px; border-radius: 6px; background: #fafafa; }
+.field-label { font-size: 0.8rem; color: var(--muted); }
+.field-value { font-weight: 600; }
+.field-missing { background: var(--orange-bg); }
+.field-missing .field-value { color: var(--orange); }
+.field-warning { font-size: 0.8rem; color: var(--orange); }
+
+.table-scroll { overflow-x: auto; }
+.lines { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.lines th, .lines td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.cell-missing, .missing-block { color: var(--orange); background: var(--orange-bg); font-weight: 600; }
+.missing-block { padding: 8px; border-radius: 6px; }
+
+/* Ligne du tableau à regarder : rouge = écart de calcul, orange = valeur non lue. */
+.row-mismatch td { background: var(--red-bg); }
+.row-mismatch td:first-child { box-shadow: inset 4px 0 var(--red); }
+.row-missing td:first-child { box-shadow: inset 4px 0 var(--orange); }
