@@ -54,3 +54,8 @@ code { background: #eee; padding: 2px 4px; border-radius: 4px; }
 .lines th, .lines td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .cell-missing, .missing-block { color: var(--orange); background: var(--orange-bg); font-weight: 600; }
 .missing-block { padding: 8px; border-radius: 6px; }
+
+/* Ligne du tableau à regarder : rouge = écart de calcul, orange = valeur non lue. */
+.row-mismatch td { background: var(--red-bg); }
+.row-mismatch td:first-child { box-shadow: inset 4px 0 var(--red); }
+.row-missing td:first-child { box-shadow: inset 4px 0 var(--orange); }

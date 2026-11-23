@@ -4,7 +4,7 @@ import { z } from "zod";
 import { runChecks } from "./checks";
 import { describeError, extractInvoice, runOcr } from "./mistral";
 import { normalizeInvoice } from "./normalize";
-import { ExtractedInvoiceSchema, type InvoiceResult } from "./schema";
+import { ExtractedInvoiceSchema, type ExtractedInvoice, type InvoiceResult } from "./schema";
 
 // Tout fichier PDF commence par ces 5 octets.
 const PDF_SIGNATURE = "%PDF-";
@@ -37,8 +37,24 @@ export async function processInvoice(pdfPath: string): Promise<InvoiceResult> {
     }
 
     const invoice = normalizeInvoice(parsed.data);
+    if (looksLikeNoInvoice(invoice)) {
+      return fail("Ce document ne ressemble pas à une facture : aucun fournisseur, numéro, montant ni ligne lu");
+    }
     return { status: "success", sourceFile, data: invoice, checks: runChecks(invoice) };
   } catch (error) {
     return fail(describeError(error));
   }
+}
+
+// Un document où rien d'une facture n'a été lu (un CV, un courrier) n'est pas une facture « à vérifier » :
+// c'est un échec, avec la raison. Testé avec un CV glissé dans le dossier : tous les champs revenaient à null.
+export function looksLikeNoInvoice(invoice: ExtractedInvoice): boolean {
+  const hasNoLines = invoice.lineItems === null || invoice.lineItems.length === 0;
+  return (
+    hasNoLines &&
+    invoice.supplierName === null &&
+    invoice.invoiceNumber === null &&
+    invoice.totalHT === null &&
+    invoice.totalTTC === null
+  );
 }

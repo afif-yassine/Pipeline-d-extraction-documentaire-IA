@@ -2,10 +2,26 @@ import type { ExtractedInvoice, Warning } from "./schema";
 
 // Ce que Zod ne vérifie pas, appliqué après la validation :
 // 1. une date mal formée ou impossible passe à null ;
-// 2. chaque champ null reçoit un avertissement, même si le LLM a oublié de le mettre.
+// 2. une quantité lue « 0 » passe à null (case masquée ou mal lue) ;
+// 3. chaque champ null reçoit un avertissement, même si le LLM a oublié de le mettre.
 // On renvoie toujours un nouvel objet : la donnée reçue n'est jamais modifiée.
 export function normalizeInvoice(invoice: ExtractedInvoice): ExtractedInvoice {
-  return addMissingFieldWarnings(nullifyInvalidDate(invoice));
+  return addMissingFieldWarnings(nullifyZeroQuantities(nullifyInvalidDate(invoice)));
+}
+
+// Une ligne facturée n'a jamais une quantité de 0. Sur une facture test, l'OCR a lu « 0 »
+// à la place d'une case noircie : on refuse cette valeur plutôt que de la garder.
+export function nullifyZeroQuantities(invoice: ExtractedInvoice): ExtractedInvoice {
+  if (invoice.lineItems === null || !invoice.lineItems.some((line) => line.quantity === 0)) return invoice;
+
+  const warnings: Warning[] = [...invoice.warnings];
+  const lineItems = invoice.lineItems.map((line, index) => {
+    if (line.quantity !== 0) return line;
+    const lineNumber = index + 1;
+    warnings.push({ field: `lineItems[${lineNumber}]`, message: `Ligne ${lineNumber} : quantité lue « 0 », probablement masquée ou illisible` });
+    return { ...line, quantity: null };
+  });
+  return { ...invoice, lineItems, warnings };
 }
 
 // Exemple : "2026-02-31" ou "03/06/2026" → null + avertissement. La facture est conservée.

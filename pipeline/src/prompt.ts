@@ -11,4 +11,7 @@ Règles :
 - Numéro de facture : la valeur après "Facture n°", "N°" ou "Numéro". Jamais la référence de commande ("Référence commande", "BC", "Bon de commande"), ni un SIRET, un n° de TVA ou un n° client.
 - Montants : des nombres, sans symbole ni espace ("1 944,00 €" devient 1944).
 - Lignes : une ligne de produit = une ligne du tableau de la facture, frais de port et forfaits compris. Recopie le total de la ligne tel qu'il est imprimé, sans le recalculer. Si le tableau est illisible, mets lineItems à null avec un avertissement.
-- totalTVA : le montant de TVA écrit sur la facture, null s'il n'y en a pas.`;
+- totalTVA : le montant de TVA écrit sur la facture, null s'il n'y en a pas.
+- Ne déduis jamais une valeur à partir des autres : pas de prix unitaire calculé depuis le total, pas de TTC reconstruit depuis HT + TVA. Recopie seulement ce qui est écrit.
+- Une quantité illisible ou masquée n'est jamais 0 : mets null.
+- Si une case du texte OCR semble anormale (même montant que la case voisine, mot sans rapport dans une désignation), mets null avec un avertissement au lieu de la corriger.`;

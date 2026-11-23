@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InvoiceResult } from "../../pipeline/src/schema";
 import { validInvoice } from "../../pipeline/test/fixtures";
-import { getInvoiceStatus } from "./status";
+import { getInvoiceStatus, getLineIssue } from "./status";
 
 const okCheck = { name: "HT + TVA = TTC", status: "ok", message: "" } as const;
 
@@ -22,5 +22,17 @@ describe("getInvoiceStatus", () => {
   });
   it("échec quand le traitement a échoué", () => {
     expect(getInvoiceStatus({ status: "error", sourceFile: "a.pdf", error: "OCR vide" })).toBe("failed");
+  });
+});
+
+describe("getLineIssue", () => {
+  it("aucun problème quand quantité × prix = total", () => {
+    expect(getLineIssue({ description: "A", quantity: 2, unitPrice: 100, lineTotal: 200 })).toBeNull();
+  });
+  it("écart quand le total imprimé ne correspond pas (Studio Botanica)", () => {
+    expect(getLineIssue({ description: "Taille de haies", quantity: 4, unitPrice: 95, lineTotal: 285 })).toBe("mismatch");
+  });
+  it("valeur manquante quand une case n'est pas lue", () => {
+    expect(getLineIssue({ description: "A", quantity: null, unitPrice: 42.9, lineTotal: 214.5 })).toBe("missing");
   });
 });

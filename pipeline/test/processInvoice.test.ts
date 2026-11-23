@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { extractInvoice, runOcr } from "../src/mistral";
-import { processInvoice } from "../src/processInvoice";
+import { looksLikeNoInvoice, processInvoice } from "../src/processInvoice";
 import { validInvoice } from "./fixtures";
 
 // On remplace les deux appels réseau par des fausses fonctions : pas de clé, pas de coût,
@@ -65,5 +65,27 @@ describe("processInvoice", () => {
     vi.mocked(extractInvoice).mockResolvedValue(validInvoice({ invoiceDate: "2026-02-31" }));
     const result = await processInvoice(pdfPath);
     expect(result.status === "success" && result.data.invoiceDate).toBeNull();
+  });
+
+  it("échec si le document n'est pas une facture (tout est null, comme pour un CV)", async () => {
+    vi.mocked(extractInvoice).mockResolvedValue(
+      validInvoice({ supplierName: null, invoiceDate: null, invoiceNumber: null, lineItems: null, totalHT: null, totalTVA: null, totalTTC: null }),
+    );
+    const result = await processInvoice(pdfPath);
+    expect(result.status === "error" && result.error).toContain("ne ressemble pas à une facture");
+  });
+});
+
+describe("looksLikeNoInvoice", () => {
+  it("faux pour une facture normale", () => {
+    expect(looksLikeNoInvoice(validInvoice())).toBe(false);
+  });
+  it("faux pour une facture très abîmée dont seul le total TTC est lu", () => {
+    const damaged = validInvoice({ supplierName: null, invoiceNumber: null, lineItems: null, totalHT: null });
+    expect(looksLikeNoInvoice(damaged)).toBe(false);
+  });
+  it("vrai quand ni fournisseur, ni numéro, ni montant, ni ligne n'est lu", () => {
+    const empty = validInvoice({ supplierName: null, invoiceNumber: null, lineItems: [], totalHT: null, totalTTC: null });
+    expect(looksLikeNoInvoice(empty)).toBe(true);
   });
 });

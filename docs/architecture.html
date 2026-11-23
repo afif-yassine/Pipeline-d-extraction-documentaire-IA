@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Architecture · Pipeline d'extraction de factures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  @page { size: A4; margin: 15mm 15mm 15mm 15mm; }
+  :root {
+    --ink: #1c2b3a; --text: #3a4654; --muted: #6b7785; --line: #dde3ea; --tint: #f1f4f7; --navy: #17304f;
+    --blue: #2f6fd0; --blue-bg: #eaf1fb; --green: #1f9a6f; --green-bg: #e8f5ef;
+    --amber: #c98a06; --amber-bg: #fdf5e2; --red: #d63340; --red-bg: #fceeee;
+    --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--serif); color: var(--text); font-size: 10.4pt; line-height: 1.55; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3, th, .sans, .cap, .legend, table { font-family: var(--sans); }
+  code { font-family: var(--mono); font-size: 8.4pt; color: var(--ink); background: var(--tint); border-radius: 3px; padding: 0 3px; }
+  p { margin: 6px 0; }
+  ul { margin: 4px 0; padding-left: 17px; } li { margin: 3px 0; }
+  svg text { font-family: var(--sans); }
+
+  /* En-tête de section : numéro cerclé, titre serré, ligne en tirets-points */
+  section { break-before: page; }
+  .sh { display: grid; grid-template-columns: 40px 1fr; align-items: center; column-gap: 14px; margin-bottom: 6px; break-after: avoid; }
+  .num { width: 32px; height: 32px; border: 1.3px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font: 500 11pt var(--sans); color: var(--ink); }
+  .sh h2 { margin: 0; font: 700 21pt/1.15 var(--sans); letter-spacing: -0.035em; color: var(--ink); }
+  .rule { grid-column: 2; height: 1.4px; margin-top: 9px; background: repeating-linear-gradient(90deg, #c7d0da 0 15px, transparent 15px 21px, #c7d0da 21px 24px, transparent 24px 30px); }
+  .lead { margin: 4px 0 16px 54px; color: var(--text); font-size: 11pt; }
+  h3 { font-size: 11.5pt; font-weight: 600; letter-spacing: -0.015em; color: var(--ink); margin: 18px 0 8px; break-after: avoid; }
+
+  .fig { border: 1px solid var(--line); border-radius: 4px; padding: 12px; margin: 10px 0 6px; break-inside: avoid; background: #fff; }
+  .cap { font-size: 9pt; color: var(--muted); margin: 6px 0 14px; line-height: 1.5; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 9pt; color: var(--text); margin: 8px 0 2px; }
+  .legend i { display: inline-block; width: 18px; height: 3px; margin-right: 7px; vertical-align: 3px; border-radius: 2px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 8px 0; color: var(--ink); }
+  th { text-align: left; font-weight: 600; padding: 8px 10px; border-bottom: 1.6px solid var(--ink); }
+  td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); color: var(--text); }
+  tr { break-inside: avoid; }
+  td.k { width: 31%; color: var(--ink); font-weight: 500; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+  .cards.three { grid-template-columns: repeat(3, 1fr); }
+  .card { border: 1px solid var(--line); border-radius: 4px; padding: 12px 15px; break-inside: avoid; border-top: 3.5px solid var(--navy); }
+  .card.blue { border-top-color: var(--blue); } .card.green { border-top-color: var(--green); } .card.amber { border-top-color: var(--amber); } .card.red { border-top-color: var(--red); }
+  .card h3 { margin: 2px 0 6px; font-size: 11.5pt; }
+  .card p, .card li { font-size: 9.8pt; }
+  .retain { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 8px 0; }
+  .retain div { border-top: 2px solid var(--ink); padding-top: 8px; }
+  .retain b { display: block; font: 600 10.5pt var(--sans); color: var(--ink); margin-bottom: 4px; letter-spacing: -0.01em; }
+  .retain span { font-size: 9.8pt; }
+  .callout { border-left: 3px solid var(--red); background: var(--red-bg); padding: 12px 16px; margin: 14px 0; break-inside: avoid; }
+  .callout.navy { border-left-color: var(--navy); background: var(--tint); }
+  .callout b { color: var(--ink); }
+
+  /* Couverture */
+  .cover { height: 267mm; display: flex; flex-direction: column; }
+  .eyebrow { font: 400 10.5pt var(--sans); color: var(--text); margin-top: 6px; }
+  .cover h1 { font-size: 40pt; line-height: 1.02; font-weight: 800; letter-spacing: -0.045em; color: var(--ink); margin: 14px 0 14px; }
+  .cover .intro { font-size: 12.5pt; color: var(--text); margin: 0 0 16px; max-width: 165mm; }
+  .cover-bottom { display: grid; grid-template-columns: 1fr 1.1fr; gap: 26px; margin-top: auto; align-items: start; }
+  .cover-bottom p { font-size: 11.2pt; margin: 22px 0 0; }
+  .cartouche-title { font: 600 9.5pt var(--sans); color: var(--ink); margin: 0 0 6px; }
+  .cartouche { border-collapse: collapse; width: 100%; font-size: 9.6pt; }
+  .cartouche td { border: 1.4px solid var(--ink); padding: 7px 10px; }
+  .cartouche td:first-child { background: var(--tint); color: var(--muted); width: 36%; font-weight: 400; }
+  .cartouche td:last-child { color: var(--ink); font-weight: 600; }
+  .st { display: inline-block; font: 600 8.4pt var(--sans); padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+  .st.ok { color: var(--green); background: var(--green-bg); } .st.pa { color: var(--amber); background: var(--amber-bg); } .st.no { color: var(--red); background: var(--red-bg); }
+  td.c { font-family: var(--sans); }
+  td.grp { font-family: var(--sans); background: var(--tint); font-weight: 600; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">Yassine AFIF, test technique Développeur·se chez JUWA</div>
+  <h1>Des factures lues<br>automatiquement,<br>sans jamais deviner</h1>
+  <p class="intro">Un pipeline qui transforme les factures fournisseurs PDF de GARNIER Industrie en données vérifiées : chaque valeur incertaine est signalée, chaque écart de calcul est chiffré, et la décision reste au comptable.</p>
+
+  <div class="fig" style="padding:10px 12px">
+  <svg viewBox="0 0 720 290" width="100%" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M18,0 L0,0 0,18" fill="none" stroke="#eef1f5" stroke-width="1"/></pattern>
+      <marker id="cv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7785"/></marker>
+    </defs>
+    <rect x="0" y="0" width="720" height="290" fill="url(#grid)"/>
+    <!-- facture -->
+    <rect x="30" y="16" width="300" height="196" rx="3" fill="#fff" stroke="#a9b3bf"/>
+    <text x="46" y="40" font-size="11" font-weight="700" fill="#1c2b3a">STUDIO BOTANICA</text>
+    <text x="46" y="54" font-size="8.5" fill="#6b7785">Facture n° 2026-087 · 03/06/2026</text>
+    <text x="250" y="40" font-size="8.5" fill="#6b7785">Client :</text>
+    <text x="250" y="52" font-size="8.5" fill="#1c2b3a">GARNIER Industrie</text>
+    <g font-size="8.4" fill="#6b7785"><text x="46" y="78">Désignation</text><text x="196" y="78">Qté</text><text x="226" y="78">P.U.</text><text x="276" y="78">Total</text></g>
+    <line x1="46" y1="84" x2="314" y2="84" stroke="#1c2b3a" stroke-width="1"/>
+    <g font-size="8.6" fill="#1c2b3a">
+      <text x="46" y="100">Tonte et débroussaillage</text><text x="200" y="100">1</text><text x="226" y="100">320,00</text><text x="276" y="100">320,00</text>
+      <rect x="40" y="108" width="280" height="20" fill="#fceeee" stroke="#d63340" stroke-width="1.2" rx="2"/>
+      <text x="46" y="122">Taille de haies</text><text x="200" y="122">4</text><text x="226" y="122">95,00</text><text x="276" y="122" font-weight="700" fill="#d63340">285,00</text>
+      <text x="46" y="144">Plantation massifs</text><text x="200" y="144">1</text><text x="226" y="144">140,00</text><text x="276" y="144">140,00</text>
+      <text x="46" y="164">Traitement phytosanitaire</text><text x="200" y="164">3</text><text x="226" y="164">60,00</text><text x="276" y="164">180,00</text>
+    </g>
+    <line x1="46" y1="174" x2="314" y2="174" stroke="#dde3ea"/>
+    <g font-size="8.6"><text x="200" y="192" fill="#6b7785">Total HT</text><text x="276" y="192" fill="#1c2b3a" font-weight="600">1040,00</text></g>
+    <!-- badge + callout -->
+    <circle cx="352" cy="118" r="13" fill="#d63340"/><text x="352" y="122.5" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">!</text>
+    <line x1="320" y1="118" x2="339" y2="118" stroke="#d63340" stroke-width="1.2"/>
+    <line x1="365" y1="112" x2="392" y2="84" stroke="#d63340" stroke-width="1.2"/>
+    <rect x="392" y="30" width="300" height="100" rx="3" fill="#fff" stroke="#d63340" stroke-width="1.3"/>
+    <text x="408" y="52" font-size="11" font-weight="700" fill="#1c2b3a">Ligne 2 : Taille de haies</text>
+    <text x="408" y="70" font-size="9" fill="#3a4654">Quantité × prix : 4 × 95,00 € = 380,00 €</text>
+    <text x="408" y="85" font-size="9" fill="#3a4654">Total imprimé : 285,00 € (écart 95,00 €)</text>
+    <text x="408" y="100" font-size="9" fill="#3a4654">Somme des lignes ≠ total HT imprimé</text>
+    <text x="408" y="118" font-size="9" font-weight="700" fill="#d63340">Statut : à vérifier</text>
+    <!-- chaîne -->
+    <g font-size="9" font-weight="600" text-anchor="middle">
+      <rect x="392" y="152" width="62" height="28" rx="3" fill="#f1f4f7" stroke="#a9b3bf"/><text x="423" y="170" fill="#1c2b3a">PDF</text>
+      <rect x="466" y="152" width="62" height="28" rx="3" fill="#17304f"/><text x="497" y="170" fill="#fff">OCR</text>
+      <rect x="540" y="152" width="62" height="28" rx="3" fill="#17304f"/><text x="571" y="170" fill="#fff">LLM</text>
+      <rect x="392" y="196" width="62" height="28" rx="3" fill="#fdf5e2" stroke="#c98a06"/><text x="423" y="214" fill="#1c2b3a">Zod</text>
+      <rect x="466" y="196" width="62" height="28" rx="3" fill="#eaf1fb" stroke="#2f6fd0"/><text x="497" y="214" fill="#1c2b3a">Contrôles</text>
+      <rect x="540" y="196" width="62" height="28" rx="3" fill="#e8f5ef" stroke="#1f9a6f"/><text x="571" y="214" fill="#1c2b3a">Page</text>
+    </g>
+    <g stroke="#6b7785" fill="none">
+      <line x1="454" y1="166" x2="464" y2="166" marker-end="url(#cv)"/><line x1="528" y1="166" x2="538" y2="166" marker-end="url(#cv)"/>
+      <path d="M602,166 C640,166 640,190 380,186 C370,186 372,210 390,210" marker-end="url(#cv)"/>
+      <line x1="454" y1="210" x2="464" y2="210" marker-end="url(#cv)"/><line x1="528" y1="210" x2="538" y2="210" marker-end="url(#cv)"/>
+    </g>
+    <text x="620" y="214" font-size="8.6" fill="#6b7785">écart affiché,</text>
+    <text x="620" y="226" font-size="8.6" fill="#6b7785">jamais corrigé</text>
+    <!-- légende interne -->
+    <g font-size="8.8" fill="#3a4654">
+      <line x1="30" y1="252" x2="48" y2="252" stroke="#17304f" stroke-width="3"/><text x="54" y="255">API Mistral</text>
+      <line x1="140" y1="252" x2="158" y2="252" stroke="#c98a06" stroke-width="3"/><text x="164" y="255">Validation du schéma</text>
+      <line x1="290" y1="252" x2="308" y2="252" stroke="#2f6fd0" stroke-width="3"/><text x="314" y="255">Pipeline</text>
+      <line x1="380" y1="252" x2="398" y2="252" stroke="#1f9a6f" stroke-width="3"/><text x="404" y="255">Interface</text>
+      <line x1="474" y1="252" x2="492" y2="252" stroke="#d63340" stroke-width="3"/><text x="498" y="255">Écart ou valeur incertaine</text>
+    </g>
+    <text x="30" y="278" font-size="8.6" fill="#6b7785">Exemple réel tiré des factures fournies : le total de ligne imprimé est gardé tel quel, ce qui permet de révéler l'erreur.</text>
+  </svg>
+  </div>
+
+  <div class="cover-bottom">
+    <p>Ce document présente l'architecture du pipeline et de son interface : les diagrammes de séquence, le schéma de données exact, le rôle de chaque fichier, puis la raison de chaque choix technique, les limites connues et ce qu'il faudrait pour passer à 4 000 factures par mois.</p>
+    <div>
+      <div class="cartouche-title">Cartouche</div>
+      <table class="cartouche">
+        <tr><td>Projet</td><td>Pipeline d'extraction de factures et interface</td></tr>
+        <tr><td>Émetteur</td><td>Yassine AFIF</td></tr>
+        <tr><td>Destinataire</td><td>Équipe JUWA</td></tr>
+        <tr><td>Cas</td><td>GARNIER Industrie, service comptable</td></tr>
+        <tr><td>Stack</td><td>TypeScript, Mistral, Zod, React, Vite</td></tr>
+        <tr><td>Date</td><td>Novembre 2026</td></tr>
+        <tr><td>Indice</td><td>A, première diffusion</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 1. VUE D'ENSEMBLE ============ -->
+<section>
+<header class="sh"><span class="num">1</span><h2>Vue d'ensemble</h2><div class="rule"></div></header>
+<p class="lead">Deux programmes indépendants reliés par un seul fichier, <code>results.json</code>, et par un seul contrat de données, <code>schema.ts</code>.</p>
+<div class="legend"><span><i style="background:#2f6fd0"></i>Pipeline (Node.js)</span><span><i style="background:#1f9a6f"></i>Interface (navigateur)</span><span><i style="background:#17304f"></i>Service externe</span><span><i style="background:#c98a06"></i>Contrat partagé</span></div>
+<div class="fig">
+<svg viewBox="0 0 720 350" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7785"/></marker>
+  </defs>
+  <rect x="8" y="30" width="118" height="300" rx="10" fill="#f1f4f7" stroke="#dde3ea"/>
+  <text x="67" y="22" text-anchor="middle" font-size="10" font-weight="700" fill="#6b7785" letter-spacing="1.5">ENTRÉES</text>
+  <rect x="20" y="60" width="94" height="62" rx="7" fill="#fff" stroke="#a9b3bf"/>
+  <text x="67" y="86" text-anchor="middle" font-size="11.5" font-weight="700">invoices/</text>
+  <text x="67" y="104" text-anchor="middle" font-size="9.5" fill="#6b7785">4 factures PDF</text>
+  <rect x="20" y="150" width="94" height="62" rx="7" fill="#fff" stroke="#a9b3bf"/>
+  <text x="67" y="176" text-anchor="middle" font-size="11.5" font-weight="700">.env</text>
+  <text x="67" y="194" text-anchor="middle" font-size="9" fill="#6b7785">MISTRAL_API_KEY</text>
+  <rect x="20" y="240" width="94" height="62" rx="7" fill="#fff" stroke="#a9b3bf" stroke-dasharray="4 3"/>
+  <text x="67" y="266" text-anchor="middle" font-size="10.5" font-weight="700">Docker</text>
+  <text x="67" y="284" text-anchor="middle" font-size="9" fill="#6b7785">option : tout en 1</text>
+
+  <rect x="146" y="30" width="286" height="300" rx="10" fill="#eaf1fb" stroke="#2f6fd0"/>
+  <text x="289" y="22" text-anchor="middle" font-size="10" font-weight="700" fill="#2f6fd0" letter-spacing="1.5">PIPELINE · npm run extract</text>
+  <rect x="162" y="48" width="254" height="44" rx="7" fill="#fff" stroke="#2f6fd0"/>
+  <text x="289" y="67" text-anchor="middle" font-size="11.5" font-weight="700">index.ts</text>
+  <text x="289" y="83" text-anchor="middle" font-size="9" fill="#6b7785">dossier · clé · 2 PDF à la fois · écriture</text>
+  <rect x="162" y="112" width="254" height="44" rx="7" fill="#fff" stroke="#2f6fd0"/>
+  <text x="289" y="131" text-anchor="middle" font-size="11.5" font-weight="700">processInvoice.ts</text>
+  <text x="289" y="147" text-anchor="middle" font-size="9" fill="#6b7785">1 PDF → 1 résultat, jamais d'exception</text>
+  <rect x="162" y="178" width="78" height="54" rx="7" fill="#fff" stroke="#2f6fd0"/>
+  <text x="201" y="200" text-anchor="middle" font-size="10.5" font-weight="700">normalize</text>
+  <text x="201" y="216" text-anchor="middle" font-size="8.5" fill="#6b7785">dates, null</text>
+  <rect x="250" y="178" width="78" height="54" rx="7" fill="#fff" stroke="#2f6fd0"/>
+  <text x="289" y="200" text-anchor="middle" font-size="10.5" font-weight="700">checks</text>
+  <text x="289" y="216" text-anchor="middle" font-size="8.5" fill="#6b7785">3 contrôles</text>
+  <rect x="338" y="178" width="78" height="54" rx="7" fill="#fff" stroke="#17304f" stroke-width="1.5"/>
+  <text x="377" y="200" text-anchor="middle" font-size="10.5" font-weight="700">mistral</text>
+  <text x="377" y="216" text-anchor="middle" font-size="8.5" fill="#6b7785">+ prompt</text>
+  <rect x="162" y="262" width="254" height="48" rx="7" fill="#fdf5e2" stroke="#c98a06" stroke-dasharray="5 3"/>
+  <text x="289" y="282" text-anchor="middle" font-size="11.5" font-weight="700" fill="#c98a06">schema.ts</text>
+  <text x="289" y="299" text-anchor="middle" font-size="9" fill="#6b7785">contrat Zod · importé aussi par l'interface</text>
+  <line x1="289" y1="92" x2="289" y2="110" stroke="#6b7785" marker-end="url(#ar)"/>
+  <line x1="230" y1="156" x2="205" y2="176" stroke="#6b7785" marker-end="url(#ar)"/>
+  <line x1="289" y1="156" x2="289" y2="176" stroke="#6b7785" marker-end="url(#ar)"/>
+  <line x1="348" y1="156" x2="373" y2="176" stroke="#6b7785" marker-end="url(#ar)"/>
+  <line x1="289" y1="232" x2="289" y2="260" stroke="#c98a06" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+  <path d="M114,91 C135,91 140,70 160,70" fill="none" stroke="#6b7785" marker-end="url(#ar)"/>
+  <path d="M114,181 C140,181 138,82 160,80" fill="none" stroke="#6b7785" marker-end="url(#ar)"/>
+
+  <rect x="452" y="150" width="120" height="112" rx="10" fill="#eef1f5" stroke="#17304f" stroke-width="1.5"/>
+  <text x="512" y="142" text-anchor="middle" font-size="10" font-weight="700" fill="#17304f" letter-spacing="1.5">API MISTRAL</text>
+  <rect x="464" y="164" width="96" height="38" rx="6" fill="#fff" stroke="#17304f"/>
+  <text x="512" y="181" text-anchor="middle" font-size="10.5" font-weight="700">OCR</text>
+  <text x="512" y="195" text-anchor="middle" font-size="8.3" fill="#6b7785">mistral-ocr-latest</text>
+  <rect x="464" y="212" width="96" height="38" rx="6" fill="#fff" stroke="#17304f"/>
+  <text x="512" y="229" text-anchor="middle" font-size="10.5" font-weight="700">LLM</text>
+  <text x="512" y="243" text-anchor="middle" font-size="8.3" fill="#6b7785">mistral-small · JSON strict</text>
+  <line x1="416" y1="198" x2="450" y2="190" stroke="#17304f" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <line x1="416" y1="215" x2="450" y2="228" stroke="#17304f" marker-end="url(#ar)" marker-start="url(#ar)"/>
+
+  <rect x="452" y="282" width="120" height="44" rx="7" fill="#e8f5ef" stroke="#1f9a6f" stroke-width="1.5"/>
+  <text x="512" y="301" text-anchor="middle" font-size="11" font-weight="700" fill="#1f9a6f">results.json</text>
+  <text x="512" y="316" text-anchor="middle" font-size="8.5" fill="#6b7785">interface/public/</text>
+  <path d="M432,304 L450,304" stroke="#1f9a6f" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="441" y="297" text-anchor="middle" font-size="8.5" fill="#1f9a6f">écrit</text>
+
+  <rect x="592" y="30" width="120" height="300" rx="10" fill="#e8f5ef" stroke="#1f9a6f"/>
+  <text x="652" y="22" text-anchor="middle" font-size="10" font-weight="700" fill="#1f9a6f" letter-spacing="1.5">INTERFACE</text>
+  <rect x="604" y="48" width="96" height="46" rx="7" fill="#fff" stroke="#1f9a6f"/>
+  <text x="652" y="68" text-anchor="middle" font-size="11" font-weight="700">App.tsx</text>
+  <text x="652" y="84" text-anchor="middle" font-size="8.5" fill="#6b7785">fetch + Zod</text>
+  <rect x="604" y="112" width="96" height="40" rx="7" fill="#fff" stroke="#1f9a6f"/>
+  <text x="652" y="136" text-anchor="middle" font-size="10.5" font-weight="700">status.ts</text>
+  <rect x="604" y="170" width="96" height="140" rx="7" fill="#fff" stroke="#1f9a6f"/>
+  <text x="652" y="190" text-anchor="middle" font-size="10" font-weight="700">components/</text>
+  <text x="652" y="212" text-anchor="middle" font-size="9.5">Summary</text>
+  <text x="652" y="230" text-anchor="middle" font-size="9.5">InvoiceCard</text>
+  <text x="652" y="248" text-anchor="middle" font-size="9.5">Alerts</text>
+  <text x="652" y="266" text-anchor="middle" font-size="9.5">Field</text>
+  <text x="652" y="284" text-anchor="middle" font-size="9.5">LineItemsTable</text>
+  <line x1="652" y1="94" x2="652" y2="110" stroke="#6b7785" marker-end="url(#ar)"/>
+  <line x1="652" y1="152" x2="652" y2="168" stroke="#6b7785" marker-end="url(#ar)"/>
+  <path d="M572,304 C585,304 585,72 602,72" fill="none" stroke="#1f9a6f" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="512" y="343" font-size="8.5" fill="#1f9a6f" text-anchor="middle">lu et revalidé par App.tsx</text>
+</svg>
+</div>
+<p class="cap">Figure 1 · Le pipeline lit les PDF, interroge Mistral, puis écrit un fichier ; l'interface lit ce fichier. La clé API ne sort jamais du pipeline.</p>
+
+<div class="cards">
+  <div class="card blue"><h3>Pipeline</h3><ul>
+    <li><code>index.ts</code> orchestre le dossier, <code>processInvoice.ts</code> traite un fichier.</li>
+    <li><code>mistral.ts</code> est le seul module qui connaît l'API.</li>
+    <li><code>normalize.ts</code> et <code>checks.ts</code> sont des fonctions pures, testées sans réseau.</li>
+  </ul></div>
+  <div class="card green"><h3>Interface</h3><ul>
+    <li>Une page React (Vite), sans serveur ni base de données.</li>
+    <li>Revalide <code>results.json</code> avec le même schéma Zod.</li>
+    <li>Un composant par élément visible, aucun <code>any</code>.</li>
+  </ul></div>
+</div>
+</section>
+
+<!-- ============ 2. SÉQUENCE EXTRACTION ============ -->
+<section>
+<header class="sh"><span class="num">2</span><h2>Diagramme de séquence : extraction</h2><div class="rule"></div></header>
+<p class="lead">Ce qui se passe, dans l'ordre, quand on tape <code>npm run extract</code>. Flèche pleine : appel ; flèche pointillée : réponse.</p>
+<div class="fig">
+<svg viewBox="0 0 720 640" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs>
+    <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1c2b3a"/></marker>
+    <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10" fill="none" stroke="#6b7785" stroke-width="1.6"/></marker>
+  </defs>
+  <g font-size="10.5" font-weight="700" text-anchor="middle">
+    <rect x="8" y="8" width="76" height="34" rx="6" fill="#f1f4f7" stroke="#a9b3bf"/><text x="46" y="29">Terminal</text>
+    <rect x="104" y="8" width="92" height="34" rx="6" fill="#eaf1fb" stroke="#2f6fd0"/><text x="150" y="29">index.ts</text>
+    <rect x="204" y="8" width="112" height="34" rx="6" fill="#eaf1fb" stroke="#2f6fd0"/><text x="260" y="29">processInvoice.ts</text>
+    <rect x="324" y="8" width="92" height="34" rx="6" fill="#eaf1fb" stroke="#2f6fd0"/><text x="370" y="29">mistral.ts</text>
+    <rect x="434" y="8" width="92" height="34" rx="6" fill="#eef1f5" stroke="#17304f"/><text x="480" y="29">API Mistral</text>
+    <rect x="536" y="8" width="104" height="34" rx="6" fill="#eaf1fb" stroke="#2f6fd0"/><text x="588" y="24">normalize.ts</text><text x="588" y="37" font-size="9.5">checks.ts</text>
+    <rect x="648" y="8" width="66" height="34" rx="6" fill="#e8f5ef" stroke="#1f9a6f"/><text x="681" y="29" font-size="9.5">results.json</text>
+  </g>
+  <g stroke="#cfd6de" stroke-dasharray="4 4">
+    <line x1="46" y1="42" x2="46" y2="630"/><line x1="150" y1="42" x2="150" y2="630"/><line x1="260" y1="42" x2="260" y2="630"/>
+    <line x1="370" y1="42" x2="370" y2="630"/><line x1="480" y1="42" x2="480" y2="630"/><line x1="588" y1="42" x2="588" y2="630"/><line x1="681" y1="42" x2="681" y2="630"/>
+  </g>
+  <g fill="#d6e4f7" stroke="#2f6fd0" stroke-width=".8">
+    <rect x="145" y="72" width="10" height="530"/>
+    <rect x="255" y="182" width="10" height="356"/>
+    <rect x="365" y="240" width="10" height="86"/>
+    <rect x="365" y="345" width="10" height="86"/>
+    <rect x="583" y="474" width="10" height="36"/>
+  </g>
+  <g fill="#dde3ea" stroke="#17304f" stroke-width=".8">
+    <rect x="475" y="266" width="10" height="34"/>
+    <rect x="475" y="371" width="10" height="34"/>
+  </g>
+  <rect x="98" y="150" width="616" height="400" rx="6" fill="none" stroke="#1f9a6f" stroke-width="1.2"/>
+  <path d="M98,150 h170 v13 l-7,7 h-163 z" fill="#e8f5ef" stroke="#1f9a6f" stroke-width="1.2"/>
+  <text x="106" y="163" font-size="9.5" font-weight="700" fill="#1f9a6f">loop · chaque PDF, 2 à la fois</text>
+  <rect x="604" y="190" width="106" height="62" rx="6" fill="#fceeee" stroke="#d63340"/>
+  <text x="612" y="206" font-size="8.8" fill="#d63340" font-weight="700">Erreur à une étape ?</text>
+  <text x="612" y="220" font-size="8.5" fill="#1c2b3a">catch → résultat</text>
+  <text x="612" y="232" font-size="8.5" fill="#1c2b3a">{ status: "error" }</text>
+  <text x="612" y="244" font-size="8.5" fill="#1c2b3a">les autres continuent</text>
+
+  <g stroke="#1c2b3a" fill="none">
+    <line x1="46" y1="78" x2="144" y2="78" marker-end="url(#s1)"/>
+    <path d="M155,100 h26 v14 h-24" marker-end="url(#s1)"/>
+    <path d="M155,128 h26 v14 h-24" marker-end="url(#s1)"/>
+    <line x1="155" y1="190" x2="254" y2="190" marker-end="url(#s1)"/>
+    <path d="M265,206 h26 v14 h-24" marker-end="url(#s1)"/>
+    <line x1="265" y1="246" x2="364" y2="246" marker-end="url(#s1)"/>
+    <line x1="375" y1="272" x2="474" y2="272" marker-end="url(#s1)"/>
+    <line x1="265" y1="351" x2="364" y2="351" marker-end="url(#s1)"/>
+    <line x1="375" y1="377" x2="474" y2="377" marker-end="url(#s1)"/>
+    <path d="M265,446 h26 v14 h-24" marker-end="url(#s1)"/>
+    <line x1="265" y1="480" x2="582" y2="480" marker-end="url(#s1)"/>
+    <line x1="155" y1="572" x2="680" y2="572" marker-end="url(#s1)"/>
+  </g>
+  <g stroke="#6b7785" fill="none" stroke-dasharray="5 3">
+    <line x1="475" y1="298" x2="376" y2="298" marker-end="url(#s2)"/>
+    <line x1="365" y1="322" x2="266" y2="322" marker-end="url(#s2)"/>
+    <line x1="475" y1="403" x2="376" y2="403" marker-end="url(#s2)"/>
+    <line x1="365" y1="427" x2="266" y2="427" marker-end="url(#s2)"/>
+    <line x1="583" y1="506" x2="266" y2="506" marker-end="url(#s2)"/>
+    <line x1="255" y1="534" x2="156" y2="534" marker-end="url(#s2)"/>
+    <line x1="145" y1="598" x2="47" y2="598" marker-end="url(#s2)"/>
+  </g>
+  <g fill="#1c2b3a">
+    <text x="95" y="73" text-anchor="middle">npm run extract</text>
+    <text x="186" y="111">loadEnvFile() · MISTRAL_API_KEY présente ?</text>
+    <text x="186" y="139">listPdfFiles("invoices") · tri par nom</text>
+    <text x="204" y="185" text-anchor="middle">processInvoice(chemin)</text>
+    <text x="296" y="217">readFile · commence par « %PDF- » ?</text>
+    <text x="314" y="241" text-anchor="middle">runOcr(pdf)</text>
+    <text x="424" y="267" text-anchor="middle">ocr.process(base64)</text>
+    <text x="424" y="293" text-anchor="middle" fill="#6b7785">markdown des pages</text>
+    <text x="314" y="317" text-anchor="middle" fill="#6b7785">texte OCR</text>
+    <text x="314" y="346" text-anchor="middle">extractInvoice(texte)</text>
+    <text x="424" y="372" text-anchor="middle">chat.complete</text>
+    <text x="424" y="398" text-anchor="middle" fill="#6b7785">JSON (schéma strict)</text>
+    <text x="314" y="422" text-anchor="middle" fill="#6b7785">unknown</text>
+    <text x="296" y="457">ExtractedInvoiceSchema.safeParse()</text>
+    <text x="424" y="475" text-anchor="middle">normalizeInvoice() · runChecks()</text>
+    <text x="424" y="501" text-anchor="middle" fill="#6b7785">facture normalisée + 3 contrôles</text>
+    <text x="204" y="529" text-anchor="middle" fill="#6b7785">InvoiceResult</text>
+    <text x="420" y="567" text-anchor="middle">writeFile(results.json) · { generatedAt, invoices }</text>
+    <text x="96" y="593" text-anchor="middle" fill="#6b7785">« 4 lues, 0 en échec »</text>
+  </g>
+</svg>
+</div>
+<p class="cap">Figure 2 · <code>processInvoice</code> ne lève jamais d'erreur : chaque PDF produit un résultat, succès ou échec. Le SDK Mistral relance seul les erreurs 429, 5xx et réseau avant d'abandonner.</p>
+</section>
+
+<!-- ============ 3. SÉQUENCE INTERFACE ============ -->
+<section>
+<header class="sh"><span class="num">3</span><h2>Diagramme de séquence : interface</h2><div class="rule"></div></header>
+<p class="lead">Ce qui se passe quand le comptable ouvre <code>http://localhost:5173</code> après <code>npm run dev</code>.</p>
+<div class="fig">
+<svg viewBox="0 0 720 420" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs>
+    <marker id="i1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1c2b3a"/></marker>
+    <marker id="i2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10" fill="none" stroke="#6b7785" stroke-width="1.6"/></marker>
+  </defs>
+  <g font-size="10.5" font-weight="700" text-anchor="middle">
+    <rect x="12" y="8" width="96" height="34" rx="6" fill="#f1f4f7" stroke="#a9b3bf"/><text x="60" y="29">Navigateur</text>
+    <rect x="142" y="8" width="96" height="34" rx="6" fill="#f1f4f7" stroke="#a9b3bf"/><text x="190" y="24">Serveur Vite</text><text x="190" y="37" font-size="9" font-weight="400" fill="#6b7785">sert public/</text>
+    <rect x="272" y="8" width="96" height="34" rx="6" fill="#e8f5ef" stroke="#1f9a6f"/><text x="320" y="29">main.tsx</text>
+    <rect x="402" y="8" width="96" height="34" rx="6" fill="#e8f5ef" stroke="#1f9a6f"/><text x="450" y="29">App.tsx</text>
+    <rect x="566" y="8" width="130" height="34" rx="6" fill="#e8f5ef" stroke="#1f9a6f"/><text x="631" y="24">Composants</text><text x="631" y="37" font-size="9" font-weight="400" fill="#6b7785">Summary, InvoiceCard…</text>
+  </g>
+  <g stroke="#cfd6de" stroke-dasharray="4 4">
+    <line x1="60" y1="42" x2="60" y2="410"/><line x1="190" y1="42" x2="190" y2="410"/><line x1="320" y1="42" x2="320" y2="410"/><line x1="450" y1="42" x2="450" y2="410"/><line x1="631" y1="42" x2="631" y2="410"/>
+  </g>
+  <g fill="#cfeadd" stroke="#1f9a6f" stroke-width=".8"><rect x="445" y="152" width="10" height="240"/><rect x="315" y="128" width="10" height="34"/></g>
+  <rect x="300" y="292" width="414" height="104" rx="6" fill="none" stroke="#c98a06" stroke-width="1.2"/>
+  <path d="M300,292 h44 v16 l-8,8 h-36 z" fill="#fdf5e2" stroke="#c98a06" stroke-width="1.2"/>
+  <text x="308" y="307" font-size="9.5" font-weight="700" fill="#c98a06">alt</text>
+  <text x="356" y="307" font-size="9" fill="#c98a06">[schéma respecté]</text>
+  <line x1="300" y1="346" x2="714" y2="346" stroke="#c98a06" stroke-dasharray="5 4"/>
+  <text x="308" y="360" font-size="9" fill="#c98a06">[fichier absent, illisible ou ancien format]</text>
+
+  <g stroke="#1c2b3a" fill="none">
+    <line x1="60" y1="76" x2="189" y2="76" marker-end="url(#i1)"/>
+    <line x1="60" y1="130" x2="314" y2="130" marker-end="url(#i1)"/>
+    <line x1="325" y1="156" x2="444" y2="156" marker-end="url(#i1)"/>
+    <path d="M455,182 h26 v14 h-24" marker-end="url(#i1)"/>
+    <line x1="445" y1="222" x2="191" y2="222" marker-end="url(#i1)"/>
+    <path d="M455,268 h26 v14 h-24" marker-end="url(#i1)"/>
+    <line x1="455" y1="330" x2="630" y2="330" marker-end="url(#i1)"/>
+    <path d="M455,372 h26 v14 h-24" marker-end="url(#i1)"/>
+  </g>
+  <g stroke="#6b7785" fill="none" stroke-dasharray="5 3">
+    <line x1="190" y1="102" x2="61" y2="102" marker-end="url(#i2)"/>
+    <line x1="190" y1="248" x2="444" y2="248" marker-end="url(#i2)"/>
+  </g>
+  <g fill="#1c2b3a">
+    <text x="125" y="71" text-anchor="middle">GET /</text>
+    <text x="125" y="97" text-anchor="middle" fill="#6b7785">index.html + main.tsx</text>
+    <text x="190" y="125" text-anchor="middle">exécute main.tsx</text>
+    <text x="385" y="151" text-anchor="middle">render(&lt;App /&gt;)</text>
+    <text x="486" y="193">state = loading → « Chargement… »</text>
+    <text x="318" y="217" text-anchor="middle">useEffect : fetch("/results.json")</text>
+    <text x="318" y="243" text-anchor="middle" fill="#6b7785">contenu JSON</text>
+    <text x="486" y="279">ResultsFileSchema.safeParse()</text>
+    <text x="542" y="325" text-anchor="middle">state = ready → résumé + 4 cartes</text>
+    <text x="486" y="383">state = error → message + « npm run extract »</text>
+  </g>
+</svg>
+</div>
+<p class="cap">Figure 3 · Un seul état <code>LoadState</code> à trois cas exclusifs (loading, error, ready) : la page ne peut jamais afficher à la fois « Chargement » et une erreur.</p>
+</section>
+
+<!-- ============ 4. SCHÉMA DE DONNÉES ============ -->
+<section>
+<header class="sh"><span class="num">4</span><h2>Schéma de données exact</h2><div class="rule"></div></header>
+<p class="lead">Défini une seule fois dans <code>pipeline/src/schema.ts</code>. Les types TypeScript en sont déduits avec <code>z.infer</code>. En orange, les champs qui peuvent valoir <code>null</code>.</p>
+<div class="fig">
+<svg viewBox="0 0 720 490" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs>
+    <marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7785"/></marker>
+  </defs>
+  <g>
+    <rect x="250" y="8" width="220" height="72" rx="7" fill="#fff" stroke="#1c2b3a"/>
+    <path d="M250,15 a7,7 0 0 1 7,-7 h206 a7,7 0 0 1 7,7 v13 h-220 z" fill="#1c2b3a"/>
+    <text x="360" y="23" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">ResultsFile · results.json</text>
+    <text x="262" y="48" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">generatedAt: string <tspan fill="#6b7785">// date ISO</tspan></text>
+    <text x="262" y="66" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">invoices: InvoiceResult[]</text>
+  </g>
+  <rect x="40" y="112" width="640" height="122" rx="10" fill="#f1f4f7" stroke="#a9b3bf" stroke-dasharray="5 4"/>
+  <text x="360" y="128" text-anchor="middle" font-size="9.5" font-weight="700" fill="#6b7785">InvoiceResult · union discriminée sur « status » (un cas OU l'autre, jamais les deux)</text>
+  <g>
+    <rect x="60" y="138" width="270" height="86" rx="7" fill="#fff" stroke="#1f9a6f"/>
+    <path d="M60,145 a7,7 0 0 1 7,-7 h256 a7,7 0 0 1 7,7 v13 h-270 z" fill="#1f9a6f"/>
+    <text x="195" y="153" text-anchor="middle" fill="#fff" font-weight="700">Succès</text>
+    <text x="72" y="175" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">status: "success"</text>
+    <text x="72" y="190" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">sourceFile: string <tspan fill="#6b7785">// provenance</tspan></text>
+    <text x="72" y="205" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">data: ExtractedInvoice</text>
+    <text x="72" y="220" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">checks: Check[]</text>
+  </g>
+  <g>
+    <rect x="390" y="138" width="270" height="72" rx="7" fill="#fff" stroke="#d63340"/>
+    <path d="M390,145 a7,7 0 0 1 7,-7 h256 a7,7 0 0 1 7,7 v13 h-270 z" fill="#d63340"/>
+    <text x="525" y="153" text-anchor="middle" fill="#fff" font-weight="700">Échec</text>
+    <text x="402" y="175" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">status: "error"</text>
+    <text x="402" y="190" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">sourceFile: string</text>
+    <text x="402" y="205" font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">error: string <tspan fill="#6b7785">// message lisible</tspan></text>
+  </g>
+  <line x1="360" y1="80" x2="360" y2="110" stroke="#6b7785" marker-end="url(#d1)"/>
+  <text x="366" y="100" font-size="9" fill="#6b7785">0..n</text>
+
+  <g font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">
+    <rect x="20" y="268" width="330" height="190" rx="7" fill="#fff" stroke="#2f6fd0"/>
+    <path d="M20,275 a7,7 0 0 1 7,-7 h316 a7,7 0 0 1 7,7 v13 h-330 z" fill="#2f6fd0"/>
+    <text x="185" y="283" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter, Segoe UI, sans-serif" font-size="10.5">ExtractedInvoice · réponse du LLM</text>
+    <text x="32" y="306">supplierName: string <tspan fill="#c98a06">| null</tspan></text>
+    <text x="32" y="324">invoiceDate: string <tspan fill="#c98a06">| null</tspan> <tspan fill="#6b7785">// AAAA-MM-JJ</tspan></text>
+    <text x="32" y="342">invoiceNumber: string <tspan fill="#c98a06">| null</tspan></text>
+    <text x="32" y="360">lineItems: LineItem[] <tspan fill="#c98a06">| null</tspan></text>
+    <text x="32" y="378">totalHT: number <tspan fill="#c98a06">| null</tspan></text>
+    <text x="32" y="396">totalTVA: number <tspan fill="#c98a06">| null</tspan> <tspan fill="#6b7785">// pour HT+TVA=TTC</tspan></text>
+    <text x="32" y="414">totalTTC: number <tspan fill="#c98a06">| null</tspan></text>
+    <text x="32" y="432">warnings: Warning[] <tspan fill="#6b7785">// [] = aucun</tspan></text>
+    <text x="32" y="450" fill="#6b7785" font-size="8.5">null = illisible · [] = vraiment aucune ligne</text>
+  </g>
+  <path d="M150,224 L150,266" stroke="#6b7785" fill="none" marker-end="url(#d1)"/>
+  <text x="156" y="250" font-size="9" fill="#6b7785">data</text>
+
+  <g font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">
+    <rect x="390" y="250" width="310" height="84" rx="7" fill="#fff" stroke="#17304f"/>
+    <path d="M390,257 a7,7 0 0 1 7,-7 h296 a7,7 0 0 1 7,7 v13 h-310 z" fill="#17304f"/>
+    <text x="545" y="265" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter, Segoe UI, sans-serif" font-size="10.5">Check · contrôle de cohérence</text>
+    <text x="402" y="288">name: string</text>
+    <text x="402" y="305">status: "ok" | "mismatch" | "not_verifiable"</text>
+    <text x="402" y="322">message: string <tspan fill="#6b7785">// écart chiffré</tspan></text>
+  </g>
+  <path d="M310,224 L420,248" stroke="#6b7785" fill="none" marker-end="url(#d1)"/>
+  <text x="338" y="252" font-size="9" fill="#6b7785">checks ×3</text>
+
+  <g font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">
+    <rect x="390" y="352" width="168" height="106" rx="7" fill="#fff" stroke="#2f6fd0"/>
+    <path d="M390,359 a7,7 0 0 1 7,-7 h154 a7,7 0 0 1 7,7 v13 h-168 z" fill="#2f6fd0"/>
+    <text x="474" y="367" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter, Segoe UI, sans-serif" font-size="10.5">LineItem</text>
+    <text x="400" y="390">description <tspan fill="#c98a06">| null</tspan></text>
+    <text x="400" y="406">quantity <tspan fill="#c98a06">| null</tspan></text>
+    <text x="400" y="422">unitPrice <tspan fill="#c98a06">| null</tspan></text>
+    <text x="400" y="438">lineTotal <tspan fill="#c98a06">| null</tspan></text>
+    <text x="400" y="452" fill="#6b7785" font-size="8.3">total imprimé, jamais recalculé</text>
+  </g>
+  <line x1="350" y1="356" x2="388" y2="372" stroke="#6b7785" marker-end="url(#d1)"/>
+  <g font-family="JetBrains Mono, Consolas, monospace" font-size="9.5">
+    <rect x="572" y="352" width="128" height="70" rx="7" fill="#fff" stroke="#c98a06"/>
+    <path d="M572,359 a7,7 0 0 1 7,-7 h114 a7,7 0 0 1 7,7 v13 h-128 z" fill="#c98a06"/>
+    <text x="636" y="367" text-anchor="middle" fill="#fff" font-weight="700" font-family="Inter, Segoe UI, sans-serif" font-size="10.5">Warning</text>
+    <text x="582" y="390">field: string</text>
+    <text x="582" y="408">message: string</text>
+  </g>
+  <path d="M350,440 C380,488 610,488 636,424" stroke="#6b7785" fill="none" marker-end="url(#d1)"/>
+</svg>
+</div>
+<table>
+<tr><th class="k">Décision</th><th>Pourquoi</th></tr>
+<tr><td class="k">Tout est nullable</td><td>Le LLM a le droit de dire « je ne sais pas ». Un champ obligatoire le forcerait à inventer ; un 0 par défaut serait pire, car 0 € est un vrai montant.</td></tr>
+<tr><td class="k">Avertissement lié à un champ</td><td>L'interface l'affiche sous le bon champ (<code>field: "totalTTC"</code>, <code>"lineItems[2]"</code>).</td></tr>
+<tr><td class="k">Union succès / échec</td><td>Impossible d'avoir à la fois des données et une erreur ; TypeScript interdit <code>data</code> sur un échec.</td></tr>
+<tr><td class="k"><code>sourceFile</code> partout</td><td>Traçabilité : chaque donnée affichée dit de quel PDF elle vient.</td></tr>
+<tr><td class="k">Types déduits (<code>z.infer</code>)</td><td>Une seule description ; des interfaces écrites à la main finiraient par diverger du schéma.</td></tr>
+</table>
+</section>
+
+<!-- ============ 5. FICHIERS ============ -->
+<section>
+<header class="sh"><span class="num">5</span><h2>Fichiers et dépendances</h2><div class="rule"></div></header>
+<p class="lead">Chaque flèche se lit « importe ». Aucune dépendance circulaire ; <code>schema.ts</code> est le seul fichier partagé par les deux programmes.</p>
+<div class="fig">
+<svg viewBox="0 0 720 400" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs>
+    <marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2f6fd0"/></marker>
+    <marker id="f2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1f9a6f"/></marker>
+    <marker id="f3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c98a06"/></marker>
+  </defs>
+  <rect x="6" y="6" width="344" height="300" rx="10" fill="#eaf1fb" opacity=".55"/>
+  <text x="18" y="24" font-weight="700" fill="#2f6fd0" font-size="10" letter-spacing="1.2">pipeline/src</text>
+  <rect x="370" y="6" width="344" height="300" rx="10" fill="#e8f5ef" opacity=".7"/>
+  <text x="382" y="24" font-weight="700" fill="#1f9a6f" font-size="10" letter-spacing="1.2">interface/src</text>
+
+  <g font-weight="700" text-anchor="middle" font-size="10">
+    <rect x="128" y="38" width="100" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="178" y="57">index.ts</text>
+    <rect x="20" y="104" width="104" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="72" y="123">concurrency.ts</text>
+    <rect x="178" y="104" width="124" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="240" y="123">processInvoice.ts</text>
+    <rect x="20" y="182" width="96" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="68" y="201">normalize.ts</text>
+    <rect x="128" y="182" width="96" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="176" y="201">checks.ts</text>
+    <rect x="236" y="182" width="96" height="30" rx="6" fill="#fff" stroke="#17304f" stroke-width="1.5"/><text x="284" y="201">mistral.ts</text>
+    <rect x="236" y="250" width="96" height="30" rx="6" fill="#fff" stroke="#2f6fd0"/><text x="284" y="269">prompt.ts</text>
+    <rect x="512" y="38" width="96" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="560" y="57">main.tsx</text>
+    <rect x="512" y="94" width="96" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="560" y="113">App.tsx</text>
+    <rect x="392" y="152" width="96" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="440" y="171">Summary</text>
+    <rect x="590" y="152" width="104" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="642" y="171">InvoiceCard</text>
+    <rect x="512" y="216" width="62" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="543" y="235">Alerts</text>
+    <rect x="582" y="216" width="52" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="608" y="235">Field</text>
+    <rect x="642" y="216" width="66" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="675" y="229" font-size="8.6">LineItems</text><text x="675" y="240" font-size="8.6">Table</text>
+    <rect x="392" y="262" width="96" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="440" y="281">status.ts</text>
+    <rect x="600" y="262" width="96" height="30" rx="6" fill="#fff" stroke="#1f9a6f"/><text x="648" y="281">format.ts</text>
+    <rect x="290" y="338" width="140" height="42" rx="8" fill="#fdf5e2" stroke="#c98a06" stroke-width="1.5"/><text x="360" y="356" fill="#c98a06" font-size="11">schema.ts</text><text x="360" y="371" font-weight="400" font-size="8.6" fill="#6b7785">importé des deux côtés</text>
+  </g>
+
+  <g stroke="#2f6fd0" fill="none" stroke-width="1.1">
+    <path d="M160,68 L90,102" marker-end="url(#f1)"/>
+    <path d="M200,68 L230,102" marker-end="url(#f1)"/>
+    <path d="M210,134 L80,180" marker-end="url(#f1)"/>
+    <path d="M235,134 L185,180" marker-end="url(#f1)"/>
+    <path d="M260,134 L280,180" marker-end="url(#f1)"/>
+    <path d="M284,212 L284,248" marker-end="url(#f1)"/>
+  </g>
+  <g stroke="#1f9a6f" fill="none" stroke-width="1.1">
+    <path d="M560,68 L560,92" marker-end="url(#f2)"/>
+    <path d="M540,124 L460,150" marker-end="url(#f2)"/>
+    <path d="M580,124 L630,150" marker-end="url(#f2)"/>
+    <path d="M620,182 L555,214" marker-end="url(#f2)"/>
+    <path d="M637,182 L611,214" marker-end="url(#f2)"/>
+    <path d="M660,182 L672,214" marker-end="url(#f2)"/>
+    <path d="M440,182 L440,260" marker-end="url(#f2)"/>
+    <path d="M598,182 C540,200 500,250 490,268" marker-end="url(#f2)"/>
+    <path d="M700,182 C716,200 716,250 690,260" marker-end="url(#f2)"/>
+    <path d="M675,246 L660,260" marker-end="url(#f2)"/>
+  </g>
+  <g stroke="#c98a06" fill="none" stroke-width="1" stroke-dasharray="4 3">
+    <path d="M68,212 C68,300 250,340 288,352" marker-end="url(#f3)"/>
+    <path d="M176,212 C176,290 270,330 292,344" marker-end="url(#f3)"/>
+    <path d="M302,126 C346,140 346,300 350,336" marker-end="url(#f3)"/>
+    <path d="M332,204 C352,230 352,310 354,336" marker-end="url(#f3)"/>
+    <path d="M128,58 C6,70 6,330 288,364" marker-end="url(#f3)"/>
+    <path d="M440,292 C430,320 420,340 432,352" marker-end="url(#f3)"/>
+    <path d="M512,112 C380,130 372,300 428,344" marker-end="url(#f3)"/>
+  </g>
+</svg>
+</div>
+<div class="legend"><span><i style="background:#2f6fd0"></i>import dans le pipeline</span><span><i style="background:#1f9a6f"></i>import dans l'interface</span><span><i style="background:#c98a06"></i>import du contrat (schémas ou types)</span><span>Les composants importent aussi des types de <code>schema.ts</code> (non dessinés pour la lisibilité).</span></div>
+
+<table>
+<tr><th>Fichier</th><th>Responsabilité unique</th></tr>
+<tr><td><code>index.ts</code></td><td>Point d'entrée : <code>.env</code>, clé, dossier, concurrence, écriture de <code>results.json</code>.</td></tr>
+<tr><td><code>processInvoice.ts</code></td><td>Un fichier : lecture, OCR, LLM, Zod, normalisation, contrôles. Renvoie toujours un résultat.</td></tr>
+<tr><td><code>mistral.ts</code> · <code>prompt.ts</code></td><td>Seul accès à l'API (client, délai, relances, erreurs) · consignes au LLM.</td></tr>
+<tr><td><code>normalize.ts</code> · <code>checks.ts</code></td><td>Date réelle, quantité « 0 » refusée, avertissements · trois contrôles, comparaison en centimes.</td></tr>
+<tr><td><code>concurrency.ts</code></td><td>N traitements en parallèle au maximum, ordre conservé.</td></tr>
+<tr><td><code>App.tsx</code> · <code>status.ts</code> · <code>format.ts</code></td><td>Chargement et états · statut de la facture et problème de chaque ligne · affichage des montants et dates.</td></tr>
+<tr><td><code>components/</code></td><td>Un composant par élément visible : résumé, carte, alertes, champ, tableau des lignes.</td></tr>
+</table>
+</section>
+
+<!-- ============ 6. CYCLE DE VIE ============ -->
+<section>
+<header class="sh"><span class="num">6</span><h2>Cycle de vie d'une facture</h2><div class="rule"></div></header>
+<p class="lead">Les étapes qu'un PDF traverse, et les trois statuts possibles à l'arrivée. Chaque sortie rouge produit un échec pour ce fichier seulement.</p>
+<div class="fig">
+<svg viewBox="0 0 720 300" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs>
+    <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1c2b3a"/></marker>
+    <marker id="c2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d63340"/></marker>
+  </defs>
+  <g text-anchor="middle">
+    <rect x="6" y="40" width="70" height="44" rx="22" fill="#f1f4f7" stroke="#a9b3bf"/><text x="41" y="60" font-weight="700">PDF</text><text x="41" y="74" font-size="8.5" fill="#6b7785">invoices/</text>
+    <rect x="94" y="40" width="80" height="44" rx="7" fill="#fff" stroke="#2f6fd0"/><text x="134" y="59" font-weight="700">Lecture</text><text x="134" y="74" font-size="8.5" fill="#6b7785">%PDF- ?</text>
+    <rect x="192" y="40" width="80" height="44" rx="7" fill="#fff" stroke="#17304f"/><text x="232" y="59" font-weight="700">OCR</text><text x="232" y="74" font-size="8.5" fill="#6b7785">texte non vide ?</text>
+    <rect x="290" y="40" width="80" height="44" rx="7" fill="#fff" stroke="#17304f"/><text x="330" y="59" font-weight="700">LLM</text><text x="330" y="74" font-size="8.5" fill="#6b7785">JSON valide ?</text>
+    <rect x="388" y="40" width="80" height="44" rx="7" fill="#fff" stroke="#c98a06"/><text x="428" y="59" font-weight="700">Zod</text><text x="428" y="74" font-size="8.5" fill="#6b7785">schéma respecté ?</text>
+    <rect x="486" y="40" width="96" height="44" rx="7" fill="#fff" stroke="#2f6fd0"/><text x="534" y="59" font-weight="700">Normalisation</text><text x="534" y="74" font-size="8.5" fill="#6b7785">date réelle, null</text>
+    <rect x="600" y="40" width="114" height="44" rx="7" fill="#fff" stroke="#2f6fd0"/><text x="657" y="59" font-weight="700">Contrôles</text><text x="657" y="74" font-size="8.5" fill="#6b7785">ok · écart · ?</text>
+  </g>
+  <g stroke="#1c2b3a" fill="none">
+    <line x1="76" y1="62" x2="92" y2="62" marker-end="url(#c1)"/><line x1="174" y1="62" x2="190" y2="62" marker-end="url(#c1)"/>
+    <line x1="272" y1="62" x2="288" y2="62" marker-end="url(#c1)"/><line x1="370" y1="62" x2="386" y2="62" marker-end="url(#c1)"/>
+    <line x1="468" y1="62" x2="484" y2="62" marker-end="url(#c1)"/><line x1="582" y1="62" x2="598" y2="62" marker-end="url(#c1)"/>
+  </g>
+  <g stroke="#d63340" fill="none" stroke-dasharray="4 3">
+    <line x1="134" y1="84" x2="134" y2="148" marker-end="url(#c2)"/>
+    <line x1="232" y1="84" x2="232" y2="148" marker-end="url(#c2)"/>
+    <line x1="330" y1="84" x2="330" y2="148" marker-end="url(#c2)"/>
+    <line x1="428" y1="84" x2="428" y2="148" marker-end="url(#c2)"/>
+  </g>
+  <g font-size="8.5" fill="#d63340">
+    <text x="139" y="112">illisible,</text><text x="139" y="123">pas un PDF</text>
+    <text x="237" y="112">OCR vide,</text><text x="237" y="123">réseau, 429</text>
+    <text x="335" y="112">pas du JSON,</text><text x="335" y="123">délai dépassé</text>
+    <text x="433" y="112">champ</text><text x="433" y="123">manquant</text>
+  </g>
+  <rect x="94" y="150" width="374" height="40" rx="7" fill="#fceeee" stroke="#d63340"/>
+  <text x="281" y="167" text-anchor="middle" font-weight="700" fill="#d63340">{ status: "error", sourceFile, error }</text>
+  <text x="281" y="181" text-anchor="middle" font-size="8.8" fill="#1c2b3a">message lisible · le PDF suivant continue</text>
+
+  <line x1="657" y1="84" x2="657" y2="118" stroke="#1c2b3a" marker-end="url(#c1)"/>
+  <rect x="560" y="120" width="154" height="70" rx="7" fill="#fff" stroke="#a9b3bf"/>
+  <text x="637" y="138" text-anchor="middle" font-weight="700">getInvoiceStatus()</text>
+  <text x="637" y="154" text-anchor="middle" font-size="8.6" fill="#6b7785">un avertissement ou un</text>
+  <text x="637" y="166" text-anchor="middle" font-size="8.6" fill="#6b7785">contrôle ≠ ok ?</text>
+  <text x="637" y="182" text-anchor="middle" font-size="8.6" fill="#6b7785">calculé dans l'interface</text>
+
+  <g text-anchor="middle" font-weight="700" font-size="10.5">
+    <rect x="94" y="232" width="174" height="40" rx="20" fill="#fceeee" stroke="#d63340"/><text x="181" y="256" fill="#d63340">Échec</text>
+    <rect x="300" y="232" width="174" height="40" rx="20" fill="#fdf5e2" stroke="#c98a06"/><text x="387" y="256" fill="#c98a06">À vérifier</text>
+    <rect x="506" y="232" width="208" height="40" rx="20" fill="#e8f5ef" stroke="#1f9a6f"/><text x="610" y="256" fill="#1f9a6f">Aucun écart détecté</text>
+  </g>
+  <line x1="181" y1="190" x2="181" y2="230" stroke="#d63340" marker-end="url(#c2)"/>
+  <path d="M590,190 C560,214 430,206 400,230" fill="none" stroke="#1c2b3a" marker-end="url(#c1)"/>
+  <text x="494" y="206" font-size="8.6" fill="#6b7785">oui</text>
+  <line x1="660" y1="190" x2="640" y2="230" stroke="#1c2b3a" marker-end="url(#c1)"/>
+  <text x="662" y="214" font-size="8.6" fill="#6b7785">non</text>
+</svg>
+</div>
+<p class="cap">Figure 6 · « Aucun écart détecté » et non « Validée » : une valeur mal lue mais cohérente avec les autres passe tous les contrôles. Une date impossible ou un champ non lu n'est pas un échec : la valeur devient <code>null</code> avec un avertissement, et la facture passe « À vérifier ».</p>
+
+<h3>Les 4 factures fournies</h3>
+<table>
+<tr><th>Facture</th><th>Particularité</th><th>Ce qui la traite</th></tr>
+<tr><td>Méca-Précision</td><td>Facture propre, 5 lignes</td><td>Chaîne normale</td></tr>
+<tr><td>Studio Botanica</td><td>Ligne fausse : 4 × 95 € = 380 €, imprimé 285 € ; deux noms d'émetteur</td><td>Total de ligne imprimé gardé → écart signalé ; règle du prompt + avertissement</td></tr>
+<tr><td>Scan 2009</td><td>Image seule, aucun texte intégré (vérifié avec <code>pdftotext</code>) ; TVA à 19,6 %</td><td>OCR sur l'image ; pas de contrôle « TVA = 20 % »</td></tr>
+<tr><td>Hydrofluid</td><td>Texte intégré mal encodé : « 187,40 �s� » au lieu de « 187,40 € »</td><td>OCR sur l'image au lieu du texte intégré</td></tr>
+</table>
+</section>
+
+<!-- ============ 7. POURQUOI ============ -->
+<section>
+<header class="sh"><span class="num">7</span><h2>Pourquoi ces choix</h2><div class="rule"></div></header>
+<p class="lead">Chaque décision, et pourquoi l'alternative évidente n'a pas été retenue.</p>
+<table>
+<tr><th class="k">Choix</th><th>Pourquoi, et pourquoi pas l'alternative</th></tr>
+<tr><td class="k">OCR puis LLM, deux appels</td><td>L'OCR lit l'image : seule façon de lire le scan et la facture mal encodée. Séparer les étapes dit si une erreur vient de la lecture ou de la compréhension.</td></tr>
+<tr><td class="k">JSON Schema strict, généré par Zod</td><td>Le format est imposé par l'API au lieu d'être demandé en texte, et il n'existe qu'une description (<code>z.toJSONSchema</code>).</td></tr>
+<tr><td class="k">Revalidation Zod malgré le mode strict</td><td>Le mode strict est une promesse du fournisseur, pas une garantie dans notre code. Une ligne attrape une réponse coupée ou un changement de modèle.</td></tr>
+<tr><td class="k"><code>temperature: 0</code></td><td>On extrait, on ne rédige pas : même facture, même résultat.</td></tr>
+<tr><td class="k">Contrôles par le code, pas par le LLM</td><td>Un LLM peut affirmer un calcul faux ; le code calcule juste, gratuitement, toujours pareil.</td></tr>
+<tr><td class="k">Centimes entiers, tolérance 1 centime</td><td>En JavaScript, 0,1 + 0,2 ≠ 0,3 ; les entiers sont exacts. Un centime couvre les arrondis imprimés.</td></tr>
+<tr><td class="k">Trois statuts de contrôle</td><td>Si une valeur manque, ni « juste » ni « faux » n'est vrai : « non vérifiable » évite le faux écart comme la fausse assurance.</td></tr>
+<tr><td class="k">Total de ligne imprimé</td><td>Recalculer fabriquerait une facture juste et cacherait l'erreur du fournisseur.</td></tr>
+<tr><td class="k">Mistral isolé dans un fichier</td><td>Changer de fournisseur ou simuler l'API dans les tests ne touche qu'un fichier.</td></tr>
+<tr><td class="k">Client créé au premier appel</td><td>Les <code>import</code> s'exécutent avant <code>main()</code>, donc avant le <code>.env</code> : créé à l'import, le client ne verrait pas la clé.</td></tr>
+<tr><td class="k">Délai 60 s, relances croissantes</td><td>Par défaut, le SDK attend 5 minutes et ne relance jamais. Attendre de plus en plus évite d'aggraver une surcharge.</td></tr>
+<tr><td class="k">Concurrence limitée (2)</td><td>Une boucle est lente ; <code>Promise.all</code> sur tout le dossier provoque des 429. Un nombre fixe concilie les deux.</td></tr>
+<tr><td class="k">Signature <code>%PDF-</code> vérifiée</td><td>Un faux PDF donne un message clair et ne consomme pas de requête.</td></tr>
+<tr><td class="k">Fichier JSON, pas de serveur</td><td>Le sujet demande une page sans base ni authentification. Rien à héberger, la clé reste côté pipeline.</td></tr>
+<tr><td class="k">React + Vite, TypeScript strict</td><td>Suffisant pour une page, sans sur-construction. <code>strict</code> et <code>noUncheckedIndexedAccess</code> forcent à traiter chaque <code>null</code>.</td></tr>
+</table>
+</section>
+
+<!-- ============ 8. ERREURS, INTERFACE, TESTS, DOCKER ============ -->
+<section>
+<header class="sh"><span class="num">8</span><h2>Erreurs, interface, tests, Docker</h2><div class="rule"></div></header>
+<h3>Gestion des erreurs</h3>
+<table>
+<tr><th>Cas</th><th>Comportement</th></tr>
+<tr><td>Clé absente, dossier introuvable ou vide</td><td>Arrêt immédiat, message avec la solution</td></tr>
+<tr><td>Fichier illisible ou pas un PDF</td><td>Échec pour ce fichier, sans appel à l'API</td></tr>
+<tr><td>OCR vide, réponse non JSON ou hors schéma</td><td>Échec pour ce fichier, avec le détail Zod</td></tr>
+<tr><td>429, 5xx, réseau, délai dépassé</td><td>Relances automatiques, puis échec lisible</td></tr>
+<tr><td>401 et autres erreurs HTTP</td><td>Échec sans relance, message explicite</td></tr>
+</table>
+
+<div class="cards">
+<div class="card green"><h3>Interface</h3><ul>
+<li><b>Lisibilité</b> : résumé par statut en haut, une carte par PDF.</li>
+<li><b>Incertitude visible</b> : écarts et avertissements en tête de carte, « Non lu » en orange, ligne en écart surlignée en rouge, symboles ✓ ✗ ? en plus des couleurs.</li>
+<li><b>Traçabilité</b> : le nom du fichier titre chaque carte.</li>
+<li><b>Robustesse</b> : <code>results.json</code> d'un ancien format → message clair.</li>
+</ul></div>
+<div class="card blue"><h3>Tests (65, <code>npm test</code>)</h3><ul>
+<li>Schéma : montant en texte refusé, absent ≠ <code>null</code>.</li>
+<li>Contrôles : cas Studio Botanica, 0,1 + 0,2, valeurs manquantes.</li>
+<li>Dates impossibles, quantité « 0 », avertissements sans doublon.</li>
+<li>Erreurs Mistral traduites ; API simulée : faux PDF, hors schéma, 429.</li>
+<li>Concurrence : ordre gardé, limite respectée.</li>
+</ul></div>
+</div>
+
+<h3>Docker</h3>
+<p>Une image <code>node:22-slim</code> installe les dépendances (couche mise en cache), lance le pipeline puis sert l'interface : <code>docker compose up --build</code>, puis <code>http://localhost:5173</code>. La clé est lue au démarrage depuis <code>.env</code> (<code>env_file</code>) et n'est jamais copiée dans l'image (<code>.dockerignore</code>). Les factures sont montées en lecture seule.</p>
+</section>
+
+<!-- ============ 9. GIT ============ -->
+<section>
+<header class="sh"><span class="num">9</span><h2>Workflow git</h2><div class="rule"></div></header>
+<p class="lead">Un commit par branche, un message court et explicite (type(portée) : description), puis une fusion dans <code>main</code> sans avance rapide : l'historique montre chaque étape séparément.</p>
+<div class="fig">
+<svg viewBox="0 0 720 150" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="9.5">
+  <line x1="20" y1="40" x2="700" y2="40" stroke="#1c2b3a" stroke-width="3"/>
+  <text x="20" y="22" font-weight="700" font-size="11" fill="#1c2b3a">main</text>
+  <circle cx="34" cy="40" r="7" fill="#1c2b3a"/>
+  <g fill="none" stroke-width="2">
+    <path d="M34,40 C46,96 70,96 82,96 C96,96 104,70 108,40" stroke="#6b7785"/>
+    <path d="M108,40 C120,96 144,96 156,96 C170,96 178,70 182,40" stroke="#c98a06"/>
+    <path d="M182,40 C194,96 218,96 230,96 C244,96 252,70 256,40" stroke="#2f6fd0"/>
+    <path d="M256,40 C268,96 292,96 304,96 C318,96 326,70 330,40" stroke="#2f6fd0"/>
+    <path d="M330,40 C342,96 366,96 378,96 C392,96 400,70 404,40" stroke="#17304f"/>
+    <path d="M520,40 C532,96 556,96 568,96 C582,96 590,70 594,40" stroke="#1f9a6f"/>
+    <path d="M594,40 C606,96 630,96 642,96 C656,96 664,70 668,40" stroke="#6b7785"/>
+  </g>
+  <g fill="#fff" stroke-width="2">
+    <circle cx="82" cy="96" r="5" stroke="#6b7785"/><circle cx="156" cy="96" r="5" stroke="#c98a06"/><circle cx="230" cy="96" r="5" stroke="#2f6fd0"/>
+    <circle cx="304" cy="96" r="5" stroke="#2f6fd0"/><circle cx="378" cy="96" r="5" stroke="#17304f"/><circle cx="568" cy="96" r="5" stroke="#1f9a6f"/><circle cx="642" cy="96" r="5" stroke="#6b7785"/>
+  </g>
+  <g fill="#1c2b3a"><circle cx="108" cy="40" r="5"/><circle cx="182" cy="40" r="5"/><circle cx="256" cy="40" r="5"/><circle cx="330" cy="40" r="5"/><circle cx="404" cy="40" r="5"/><circle cx="594" cy="40" r="5"/><circle cx="668" cy="40" r="5"/></g>
+  <text x="462" y="72" text-anchor="middle" font-size="16" fill="#6b7785">· · ·</text>
+  <g text-anchor="middle" font-size="8.6" fill="#1c2b3a">
+    <text x="82" y="118">chore/npm-setup</text><text x="156" y="132">feat/invoice-schema</text><text x="230" y="118">test/invoice-schema</text>
+    <text x="304" y="132">feat/consistency-checks</text><text x="378" y="118">feat/mistral-client</text><text x="568" y="118">feat/ui-page</text><text x="642" y="132">docs/architecture</text>
+  </g>
+</svg>
+</div>
+<p class="cap">Figure 9 · ● fusion dans <code>main</code> (merge sans avance rapide) · ○ le commit unique de la branche. Chaque branche compile et passe tous les tests avant d'être fusionnée.</p>
+<table>
+<tr><th style="width:5%">#</th><th style="width:33%">Branche</th><th>Commit</th></tr>
+<tr><td>0</td><td><code>main</code></td><td>chore: initialise le dépôt (.gitignore, .gitattributes)</td></tr>
+<tr><td>1</td><td><code>chore/npm-setup</code></td><td>chore: dépendances et scripts npm</td></tr>
+<tr><td>2</td><td><code>chore/typescript-config</code></td><td>chore: configuration TypeScript stricte</td></tr>
+<tr><td>3</td><td><code>chore/env-example</code></td><td>chore: modèle de configuration .env.example</td></tr>
+<tr><td>4</td><td><code>chore/sample-invoices</code></td><td>chore: ajoute les 4 factures fournies</td></tr>
+<tr><td>5</td><td><code>feat/invoice-schema</code></td><td>feat(schema): schéma Zod des factures et du fichier de résultats</td></tr>
+<tr><td>6</td><td><code>test/invoice-schema</code></td><td>test(schema): formes acceptées et refusées</td></tr>
+<tr><td>7</td><td><code>feat/consistency-checks</code></td><td>feat(checks): contrôles de cohérence en centimes</td></tr>
+<tr><td>8</td><td><code>test/consistency-checks</code></td><td>test(checks): écarts, valeurs manquantes, arrondis</td></tr>
+<tr><td>9</td><td><code>feat/normalize</code></td><td>feat(pipeline): normalisation des dates et des champs non lus</td></tr>
+<tr><td>10</td><td><code>test/normalize</code></td><td>test(pipeline): dates impossibles et avertissements</td></tr>
+<tr><td>11</td><td><code>feat/llm-prompt</code></td><td>feat(mistral): consignes d'extraction pour le LLM</td></tr>
+<tr><td>12</td><td><code>feat/mistral-client</code></td><td>feat(mistral): OCR et extraction structurée</td></tr>
+<tr><td>13</td><td><code>test/mistral-errors</code></td><td>test(mistral): messages d'erreur lisibles</td></tr>
+<tr><td>14</td><td><code>feat/process-invoice</code></td><td>feat(pipeline): traitement d'une facture sans exception</td></tr>
+<tr><td>15</td><td><code>test/process-invoice</code></td><td>test(pipeline): traitement avec Mistral simulé</td></tr>
+<tr><td>16</td><td><code>feat/concurrency</code></td><td>feat(pipeline): traitement en parallèle avec limite</td></tr>
+<tr><td>17</td><td><code>test/concurrency</code></td><td>test(pipeline): ordre et limite de concurrence</td></tr>
+<tr><td>18</td><td><code>feat/extract-command</code></td><td>feat(pipeline): commande npm run extract</td></tr>
+<tr><td>19</td><td><code>feat/ui-status</code></td><td>feat(interface): statut d'une facture et formatage</td></tr>
+<tr><td>20</td><td><code>test/ui-status</code></td><td>test(interface): calcul du statut affiché</td></tr>
+<tr><td>21</td><td><code>feat/ui-components</code></td><td>feat(interface): composants d'affichage</td></tr>
+<tr><td>22</td><td><code>feat/ui-page</code></td><td>feat(interface): page principale, chargement et erreurs</td></tr>
+<tr><td>23</td><td><code>feat/docker</code></td><td>feat(docker): image et compose pour tout lancer</td></tr>
+<tr><td>24</td><td><code>docs/readme</code></td><td>docs: README (démarrage, choix, limites)</td></tr>
+<tr><td>25</td><td><code>docs/architecture</code></td><td>docs: document d'architecture et diagrammes</td></tr>
+<tr><td>26</td><td><code>feat/zero-quantity-guard</code></td><td>feat(pipeline): quantité « 0 » refusée (case masquée)</td></tr>
+<tr><td>27</td><td><code>test/zero-quantity-guard</code></td><td>test(pipeline): quantité 0 passée à null</td></tr>
+<tr><td>28</td><td><code>fix/prompt-no-deduction</code></td><td>fix(mistral): ne jamais déduire une valeur des autres</td></tr>
+<tr><td>29</td><td><code>feat/ui-line-highlight</code></td><td>feat(interface): surligne la ligne en écart ou incomplète</td></tr>
+<tr><td>30</td><td><code>test/ui-line-highlight</code></td><td>test(interface): problème de chaque ligne</td></tr>
+<tr><td>31</td><td><code>test/masked-invoice</code></td><td>test: facture 4 masquée pour les valeurs cachées</td></tr>
+<tr><td>32</td><td><code>docs/readme-results</code></td><td>docs: résultats réels et limite des valeurs masquées</td></tr>
+<tr><td>33</td><td><code>docs/architecture-compliance</code></td><td>docs: conformité au sujet et alternatives testées</td></tr>
+</table>
+</section>
+
+<!-- ============ 10. RÉSULTATS ET VALEURS MASQUÉES ============ -->
+<section>
+<header class="sh"><span class="num">10</span><h2>Résultats réels et valeurs masquées</h2><div class="rule"></div></header>
+<p class="lead">Le pipeline a été exécuté avec Mistral sur les 4 factures fournies, puis sur une facture volontairement piégée. Ce second test a révélé une limite réelle, documentée ici avec les solutions essayées.</p>
+
+<h3>Les 4 factures fournies : 4 lues, 0 en échec</h3>
+<table>
+<tr><th>Facture</th><th>Statut</th><th>Ce qui a été détecté</th></tr>
+<tr><td class="c">Méca-Précision</td><td><span class="st ok">Aucun écart</span></td><td>Toutes les valeurs lues, trois contrôles justes.</td></tr>
+<tr><td class="c">Studio Botanica</td><td><span class="st pa">À vérifier</span></td><td>Ligne 2 : 4 × 95 € = 380 €, imprimé 285 € ; somme des lignes ≠ total HT. Ligne surlignée en rouge.</td></tr>
+<tr><td class="c">Scan 2009</td><td><span class="st pa">À vérifier</span></td><td>Avertissement sur le nom du fournisseur ; montants cohérents.</td></tr>
+<tr><td class="c">Hydrofluid</td><td><span class="st ok">Aucun écart</span></td><td>Texte intégré mal encodé ignoré : l'OCR lit l'image.</td></tr>
+</table>
+
+<h3>Le test piégé : des cases noircies et raturées</h3>
+<p>Sur une copie de la facture Hydrofluid (<code>test-invoices/facture_4_masquee.pdf</code>), des cases ont été cachées à la main. Résultat attendu : <code>null</code> + avertissement pour chacune.</p>
+<table>
+<tr><th>Case cachée</th><th>Texte rendu par l'OCR</th><th>Résultat actuel</th></tr>
+<tr><td class="c">Quantité ligne 2 (tache noire)</td><td><code>0</code></td><td><span class="st ok">null + avertissement</span></td></tr>
+<tr><td class="c">Prix unitaire ligne 1 (noirci)</td><td><code>562,20</code> (copié du total)</td><td><span class="st pa">Gardé, ligne en écart (rouge)</span></td></tr>
+<tr><td class="c">Désignation ligne 2 (noircie en partie)</td><td>« Filtre produit 60 mm »</td><td><span class="st no">Texte inventé gardé</span></td></tr>
+<tr><td class="c">Désignation ligne 1 (raturée)</td><td>« contre formé »</td><td><span class="st no">Texte reconstruit gardé</span></td></tr>
+</table>
+
+<div class="fig">
+<svg viewBox="0 0 720 120" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="10">
+  <defs><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7785"/></marker></defs>
+  <rect x="10" y="20" width="130" height="64" rx="4" fill="#fff" stroke="#a9b3bf"/>
+  <text x="75" y="40" text-anchor="middle" font-weight="600" fill="#1c2b3a">Image de la page</text>
+  <rect x="58" y="50" width="34" height="16" rx="8" fill="#1c2b3a"/>
+  <text x="75" y="78" text-anchor="middle" font-size="8.6" fill="#6b7785">quantité sous une tache</text>
+  <rect x="180" y="20" width="120" height="64" rx="4" fill="#17304f"/>
+  <text x="240" y="46" text-anchor="middle" font-weight="600" fill="#fff">OCR Mistral</text>
+  <text x="240" y="64" text-anchor="middle" font-size="8.6" fill="#cfd6de">voit l'image</text>
+  <rect x="340" y="20" width="110" height="64" rx="4" fill="#fceeee" stroke="#d63340"/>
+  <text x="395" y="46" text-anchor="middle" font-weight="600" fill="#d63340">texte : « 0 »</text>
+  <text x="395" y="64" text-anchor="middle" font-size="8.6" fill="#3a4654">la tache a disparu</text>
+  <rect x="490" y="20" width="110" height="64" rx="4" fill="#17304f"/>
+  <text x="545" y="46" text-anchor="middle" font-weight="600" fill="#fff">LLM</text>
+  <text x="545" y="64" text-anchor="middle" font-size="8.6" fill="#cfd6de">ne voit que le texte</text>
+  <rect x="630" y="20" width="80" height="64" rx="4" fill="#e8f5ef" stroke="#1f9a6f"/>
+  <text x="670" y="42" text-anchor="middle" font-weight="600" fill="#1c2b3a">normalize</text>
+  <text x="670" y="58" text-anchor="middle" font-size="8.6" fill="#3a4654">0 → null</text>
+  <text x="670" y="71" text-anchor="middle" font-size="8.6" fill="#3a4654">+ avertissement</text>
+  <g stroke="#6b7785" fill="none"><line x1="140" y1="52" x2="178" y2="52" marker-end="url(#m1)"/><line x1="300" y1="52" x2="338" y2="52" marker-end="url(#m1)"/><line x1="450" y1="52" x2="488" y2="52" marker-end="url(#m1)"/><line x1="600" y1="52" x2="628" y2="52" marker-end="url(#m1)"/></g>
+  <text x="360" y="108" text-anchor="middle" font-size="9" fill="#6b7785">L'information « cette case était cachée » est perdue dès l'OCR : le LLM ne peut pas la retrouver dans le texte.</text>
+</svg>
+</div>
+<p class="cap">Figure 10 · C'est l'OCR qui invente, pas le LLM : lancé seul sur la facture piégée, il rend déjà « 0 », « 562,20 € » et « Filtre produit ».</p>
+
+<h3>Alternatives testées pour respecter la consigne</h3>
+<table>
+<tr><th style="width:33%">Solution</th><th>Résultat du test</th><th style="width:15%">Décision</th></tr>
+<tr><td class="c">OCR qui juge lui-même chaque case (<code>documentAnnotationPrompt</code>)</td><td>Aucune fausse alerte sur les originales, mais quantité masquée trouvée 1 fois sur 2, prix noirci jamais.</td><td><span class="st no">Écartée</span></td></tr>
+<tr><td class="c">Image de la page renvoyée par l'OCR (<code>includeImageBase64</code>)</td><td>0 image renvoyée : l'option ne donne que les photos intégrées au PDF, pas la page.</td><td><span class="st no">Écartée</span></td></tr>
+<tr><td class="c">PDF envoyé directement au LLM (chat + document)</td><td>Répond « 562,20 € » et « 0 » et affirme qu'aucune case n'est cachée : un OCR est fait en interne.</td><td><span class="st no">Écartée</span></td></tr>
+<tr><td class="c"><b>B.</b> Règles dans le code et le prompt, sans dépendance</td><td>Quantité « 0 » → <code>null</code> ; consigne « ne jamais déduire » ; ligne en écart surlignée. Le LLM a ignoré la consigne « jamais 0 » : la règle du code l'a rattrapé.</td><td><span class="st ok">En place</span></td></tr>
+<tr><td class="c"><b>A.</b> Envoyer aussi l'image des pages au LLM</td><td>Seule solution complète : le LLM compare le texte OCR à l'image, qui fait foi. Demande une bibliothèque de rendu PDF (<code>mupdf</code>, sans IA). Reste dans les consignes : Mistral uniquement, même chaîne OCR → LLM → schéma → contrôles.</td><td><span class="st pa">Prochaine étape</span></td></tr>
+</table>
+<div class="callout navy"><b>Pourquoi ne pas tout résoudre par le prompt ?</b> Le prompt demande déjà de ne jamais inventer, et le LLM a tout de même recopié « 0 ». Une consigne réduit le risque, seul le code le garantit : c'est le même principe que la revalidation Zod après le mode strict.</div>
+</section>
+
+<!-- ============ 11. CONFORMITÉ ============ -->
+<section>
+<header class="sh"><span class="num">11</span><h2>Conformité au sujet</h2><div class="rule"></div></header>
+<p class="lead">Chaque consigne du sujet, son état et où le vérifier.</p>
+<table>
+<tr><th style="width:42%">Consigne</th><th style="width:15%">État</th><th>Preuve</th></tr>
+<tr><td colspan="3" class="grp">B1 · Pipeline</td></tr>
+<tr><td class="c">Pipeline TypeScript qui traite un dossier</td><td><span class="st ok">Respecté</span></td><td><code>npm run extract [dossier]</code></td></tr>
+<tr><td class="c">OCR → LLM structured output → schéma → contrôles</td><td><span class="st ok">Respecté</span></td><td>Figure 2, <code>processInvoice.ts</code></td></tr>
+<tr><td class="c">JSON validé par un schéma typé, avec les champs demandés</td><td><span class="st ok">Respecté</span></td><td>Zod, figure 4</td></tr>
+<tr><td class="c">Conception du schéma : optionnels, avertissements, provenance</td><td><span class="st ok">Respecté</span></td><td><code>null</code>, <code>warnings[field]</code>, <code>sourceFile</code></td></tr>
+<tr><td class="c">Champ illisible → <code>null</code> + avertissement, jamais inventé</td><td><span class="st pa">Partiel</span></td><td>Respecté pour les valeurs signalées et les quantités « 0 » ; pas encore pour une valeur inventée par l'OCR sous une zone masquée (section 10)</td></tr>
+<tr><td class="c">Contrôles de cohérence et écarts signalés</td><td><span class="st ok">Respecté</span></td><td>3 contrôles, écart chiffré, ligne surlignée</td></tr>
+<tr><td class="c">Erreurs : fichier illisible, LLM invalide ou hors schéma, réseau, 429</td><td><span class="st ok">Respecté</span></td><td>Tests avec Mistral simulé</td></tr>
+<tr><td class="c">Une facture en échec ne fait pas tomber les autres</td><td><span class="st ok">Respecté</span></td><td><code>processInvoice</code> ne lève jamais d'erreur ; testé avec une fausse clé</td></tr>
+<tr><td class="c">Cas dégradés : scan, particularité technique</td><td><span class="st ok">Respecté</span></td><td>Scan 2009 et encodage Hydrofluid lus (section 10)</td></tr>
+<tr><td class="c">Résultat directement consommable par l'interface</td><td><span class="st ok">Respecté</span></td><td><code>results.json</code> revalidé par Zod</td></tr>
+<tr><td colspan="3" class="grp">B2 · Interface</td></tr>
+<tr><td class="c">TypeScript, une page, sans authentification ni base</td><td><span class="st ok">Respecté</span></td><td>React + Vite</td></tr>
+<tr><td class="c">Charge le résultat du pipeline</td><td><span class="st ok">Respecté</span></td><td><code>fetch("/results.json")</code></td></tr>
+<tr><td class="c">Lisibilité, incertitude visible, traçabilité</td><td><span class="st ok">Respecté</span></td><td>Résumé, « Non lu » orange, ligne en écart rouge, nom du PDF</td></tr>
+<tr><td class="c">Composants découpés, pas de <code>any</code>, chargement et erreur</td><td><span class="st ok">Respecté</span></td><td>5 composants, <code>LoadState</code></td></tr>
+<tr><td class="c">Sobriété</td><td><span class="st ok">Respecté</span></td><td>Une page, aucune bibliothèque d'interface</td></tr>
+<tr><td colspan="3" class="grp">Contraintes et livrables</td></tr>
+<tr><td class="c">API Mistral uniquement</td><td><span class="st ok">Respecté</span></td><td><code>mistral.ts</code>, seul accès à l'IA</td></tr>
+<tr><td class="c">Clé jamais commitée, variable d'environnement, <code>.env.example</code></td><td><span class="st ok">Respecté</span></td><td><code>.gitignore</code>, <code>.dockerignore</code></td></tr>
+<tr><td class="c">README : installation en moins de 5 minutes, commande unique</td><td><span class="st ok">Respecté</span></td><td><code>npm start</code></td></tr>
+<tr><td class="c">Historique git lisible, commits réguliers</td><td><span class="st pa">Partiel</span></td><td>Une branche par commit, fusionnée dans <code>main</code> ; commits tous du même jour</td></tr>
+<tr><td class="c">Dépôt GitHub</td><td><span class="st no">Pas encore</span></td><td>À créer et pousser</td></tr>
+<tr><td class="c">Choix techniques et limites</td><td><span class="st ok">Respecté</span></td><td>README, sections 7, 10 et 12</td></tr>
+<tr><td class="c">Estimation honnête du temps passé</td><td><span class="st no">Pas encore</span></td><td>À compléter par le candidat dans le README</td></tr>
+<tr><td colspan="3" class="grp">Bonus</td></tr>
+<tr><td class="c">Tests automatisés (schéma, contrôles, montants)</td><td><span class="st ok">Respecté</span></td><td>65 tests, <code>npm test</code></td></tr>
+<tr><td class="c">Traitement en parallèle avec limite</td><td><span class="st ok">Respecté</span></td><td><code>CONCURRENCY</code>, <code>concurrency.ts</code></td></tr>
+<tr><td class="c">Dockerfile ou script unique</td><td><span class="st ok">Respecté</span></td><td><code>docker compose up --build</code>, testé</td></tr>
+<tr><td class="c">Paragraphe « de 4 à 4 000 factures »</td><td><span class="st ok">Respecté</span></td><td>README, section 12</td></tr>
+</table>
+</section>
+
+<!-- ============ 12. LIMITES ============ -->
+<section>
+<header class="sh"><span class="num">12</span><h2>Limites connues et passage à 4 000 factures</h2><div class="rule"></div></header>
+<h3>Limites</h3>
+<ul>
+<li>Une valeur cachée sur le document (tache, rature) peut être inventée par l'OCR ; seuls la quantité « 0 » et les écarts de calcul sont rattrapés (section 10).</li>
+<li>Une valeur plausible mais mal lue ou mal attribuée peut passer tous les contrôles : échéance prise pour la date d'émission, référence de commande prise pour le numéro, jour et mois inversés. La relecture humaine reste nécessaire.</li>
+<li>Provenance au niveau du fichier, pas de la page ni de la position dans le PDF.</li>
+<li>Euro uniquement ; pas d'avoirs, de remises ni de TVA par ligne.</li>
+<li>Le nom du client (GARNIER Industrie) est écrit dans le prompt ; pour plusieurs clients, il deviendrait une configuration.</li>
+<li>Les factures partent vers une API externe (Mistral, hébergé dans l'UE) : à valider avec le client pour des données réelles.</li>
+</ul>
+<h3>De 4 à 4 000 factures par mois</h3>
+<div class="cards">
+<div class="card blue"><h3>Traitement</h3><ul>
+<li><b>File d'attente + workers</b> (BullMQ/Redis ou SQS) : chaque facture est un travail indépendant, relancé seul.</li>
+<li><b>Débit</b> : concurrence réglée sur le quota Mistral.</li>
+<li><b>Cache</b> par empreinte SHA-256 : un doublon n'est jamais retraité.</li>
+</ul></div>
+<div class="card"><h3>Données et qualité</h3><ul>
+<li><b>PostgreSQL</b> pour résultats, statuts et historique ; une petite API pour l'interface.</li>
+<li><b>Corrections enregistrées</b> (qui, quoi, quand), réutilisées comme jeu de test à chaque changement de prompt ou de modèle.</li>
+<li><b>Contrôles enrichis</b> : fournisseur par SIRET, détection des doublons ; suivi du coût et du taux d'échec.</li>
+</ul></div>
+</div>
+</section>
+
+</body>
+</html>

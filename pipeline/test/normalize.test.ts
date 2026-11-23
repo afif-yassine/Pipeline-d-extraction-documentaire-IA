@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMissingFieldWarnings, isRealIsoDate, normalizeInvoice, nullifyInvalidDate } from "../src/normalize";
+import { addMissingFieldWarnings, isRealIsoDate, normalizeInvoice, nullifyInvalidDate, nullifyZeroQuantities } from "../src/normalize";
 import { validInvoice } from "./fixtures";
 
 describe("isRealIsoDate", () => {
@@ -49,9 +49,26 @@ describe("addMissingFieldWarnings", () => {
   });
 });
 
+describe("nullifyZeroQuantities", () => {
+  it("passe une quantité 0 à null avec un avertissement (case masquée lue « 0 » par l'OCR)", () => {
+    const invoice = validInvoice({ lineItems: [{ description: "Filtre", quantity: 0, unitPrice: 42.9, lineTotal: 214.5 }] });
+    const result = nullifyZeroQuantities(invoice);
+    expect(result.lineItems?.[0]?.quantity).toBeNull();
+    expect(result.warnings).toEqual([{ field: "lineItems[1]", message: "Ligne 1 : quantité lue « 0 », probablement masquée ou illisible" }]);
+  });
+  it("ne touche pas une facture sans quantité à 0", () => {
+    const invoice = validInvoice();
+    expect(nullifyZeroQuantities(invoice)).toBe(invoice);
+  });
+});
+
 describe("normalizeInvoice", () => {
   it("une date impossible donne un seul avertissement, pas deux", () => {
     const result = normalizeInvoice(validInvoice({ invoiceDate: "2026-02-31" }));
     expect(result.warnings.filter((warning) => warning.field === "invoiceDate")).toHaveLength(1);
+  });
+  it("une quantité à 0 donne un seul avertissement pour la ligne, pas deux", () => {
+    const result = normalizeInvoice(validInvoice({ lineItems: [{ description: "A", quantity: 0, unitPrice: 10, lineTotal: 10 }] }));
+    expect(result.warnings.filter((warning) => warning.field === "lineItems[1]")).toHaveLength(1);
   });
 });
