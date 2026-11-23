@@ -1,5 +1,7 @@
 # Pipeline d'extraction de factures
 
+[![CI](https://github.com/afif-yassine/Pipeline-d-extraction-documentaire-IA/actions/workflows/ci.yml/badge.svg)](https://github.com/afif-yassine/Pipeline-d-extraction-documentaire-IA/actions/workflows/ci.yml)
+
 Lit des factures fournisseurs PDF avec l'API Mistral (OCR puis LLM), valide les données avec Zod, contrôle leur cohérence, puis les affiche sur une page web pour un comptable.
 
 Règle suivie partout : **un champ vide vaut mieux qu'une valeur fausse**. Une valeur incertaine devient `null` avec un avertissement ; un calcul incohérent est signalé avec l'écart ; rien n'est jamais corrigé automatiquement.
@@ -27,9 +29,11 @@ Avec Docker (sans installer Node) : `cp .env.example .env`, collez la clé, puis
 | `npm run extract -- chemin/du/dossier` | Traite un autre dossier |
 | `npm run extract -- test-invoices` | Traite la facture de test masquée (voir « Limites connues ») |
 | `npm run dev` | Lance l'interface seule |
-| `npm test` | Lance les 65 tests (sans clé ni réseau) |
+| `npm test` | Lance les 69 tests (sans clé ni réseau) |
 | `npm run typecheck` | Vérifie les types TypeScript |
 | `docker compose up --build` | Pipeline puis interface, dans un conteneur |
+
+À chaque push sur `main` et à chaque pull request, GitHub Actions (`.github/workflows/ci.yml`) réinstalle le projet sur une machine Linux propre, puis lance `npm run typecheck` et `npm test`. Aucune clé n'est nécessaire : les tests simulent Mistral.
 
 Configuration (`.env`) :
 
@@ -55,7 +59,7 @@ pipeline/src/
 ├── checks.ts           Contrôles de cohérence (une fonction par contrôle)
 └── concurrency.ts      N traitements en parallèle au maximum, ordre conservé
 pipeline/test/          Tests vitest (Mistral simulé)
-test-invoices/          Facture 4 volontairement masquée, pour tester les valeurs cachées
+test-invoices/          Facture volontairement masquée (facture_5_masquee.pdf), pour tester les valeurs cachées
 
 interface/src/
 ├── App.tsx             Charge et revalide results.json, états chargement / erreur / prêt
@@ -99,6 +103,7 @@ Dans l'interface, la ligne en écart est surlignée en rouge et une ligne avec u
 | --- | --- |
 | Clé absente, dossier vide ou introuvable | Arrêt immédiat avec la solution |
 | Fichier illisible ou pas un PDF | Échec pour ce fichier, sans appel à l'API |
+| Document qui n'est pas une facture (aucun fournisseur, numéro, montant ni ligne lu, par exemple un CV) | Échec pour ce fichier, avec la raison |
 | OCR vide, réponse du LLM non JSON ou hors schéma | Échec pour ce fichier, avec le détail |
 | Erreur réseau, délai dépassé (60 s), 429, 5xx | Relances avec attente croissante, puis échec lisible |
 | 401 et autres erreurs HTTP | Échec pour ce fichier, sans relance |
@@ -119,10 +124,9 @@ Les principaux, détaillés avec leurs alternatives dans [`docs/architecture.pdf
 ## Limites connues
 
 - Une valeur plausible mais mal lue ou mal attribuée peut passer tous les contrôles (échéance prise pour la date d'émission, référence de commande prise pour le numéro, jour/mois inversés). La relecture humaine reste nécessaire.
-- Provenance au niveau du fichier, pas de la page ni de la position dans le PDF.
 - Euro uniquement ; pas d'avoirs, de remises ni de TVA par ligne. Pas de contrôle « TVA = 20 % » : la facture de 2009 est à 19,6 %, et une facture peut mélanger plusieurs taux.
 - Le nom du client (GARNIER Industrie) est écrit dans le prompt.
-- **Valeurs masquées** : sur une facture où des cases ont été volontairement noircies ou raturées (`test-invoices/facture_4_masquee.pdf`), l'OCR invente une valeur sous la tache (« 0 », un montant copié de la case voisine, une désignation reconstruite) et le LLM, qui ne reçoit que ce texte, ne peut pas le voir. Ce qui est en place : la quantité « 0 » devient `null`, les écarts de calcul font passer la facture « À vérifier » et surlignent la ligne. Ce qui reste : un montant ou un texte inventé sans écart de calcul n'est pas mis à `null`. Trois solutions sans dépendance ont été testées et écartées (détail dans `docs/architecture.pdf`) ; la correction complète consiste à envoyer aussi l'image des pages au LLM, ce qui demande une bibliothèque de rendu PDF (`mupdf`).
+- **Valeurs masquées** : sur une facture où des cases ont été volontairement noircies ou raturées (`test-invoices/facture_5_masquee.pdf`), l'OCR invente une valeur sous la tache (« 0 », un montant copié de la case voisine, une désignation reconstruite) et le LLM, qui ne reçoit que ce texte, ne peut pas le voir. Ce qui est en place : la quantité « 0 » devient `null`, les écarts de calcul font passer la facture « À vérifier » et surlignent la ligne. Ce qui reste : un montant ou un texte inventé sans écart de calcul n'est pas mis à `null`. Trois solutions sans dépendance ont été testées et écartées (détail dans `docs/architecture.pdf`) ; la correction complète consiste à envoyer aussi l'image des pages au LLM, ce qui demande une bibliothèque de rendu PDF (`mupdf`).
 - Testé sur les 4 factures fournies et une facture modifiée.
 
 ## De 4 à 4 000 factures par mois
@@ -136,6 +140,9 @@ Les principaux, détaillés avec leurs alternatives dans [`docs/architecture.pdf
 
 ## Temps passé
 
-- Pipeline (B1) : à compléter
-- Interface (B2) : à compléter
-- Documentation et tests : à compléter
+- Architecture et conception : 1 h
+- Code et vérification de chaque partie (pipeline et interface), résolution des problèmes : 2 h
+- Tests automatisés et revue de code : 1 h
+- Livraison (README, document d'architecture, historique git) : 30 min
+
+Total : environ 4 h 30 de travail, plus environ 2 h d'attente de la clé Mistral, non comptées.
