@@ -1,0 +1,9 @@
+# Une commande pour tout lancer : docker compose up --build
+services:
+  factures:
+    build: .
+    env_file: .env # MISTRAL_API_KEY et CONCURRENCY, lus au démarrage du conteneur
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./invoices:/app/invoices:ro # les factures restent sur la machine, en lecture seule
